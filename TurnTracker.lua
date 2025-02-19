@@ -88,7 +88,7 @@ local function CreatePortrait(parentFrame, unit, playerName)
         -- It's an NPC, use model
         if _G.CampaignToolkit_UnitFrames and _G.CampaignToolkit_UnitFrames.frames then
             for _, frame in ipairs(_G.CampaignToolkit_UnitFrames.frames) do
-                if frame.NPCName and frame.NPCName:GetText() == playerName then
+                if frame.NPCName and frame.NPCName == playerName then
                     local npcID = frame.Portrait:GetDisplayInfo()  -- Get NPC Model ID
                     model:ClearModel()
                     model:SetDisplayInfo(npcID)

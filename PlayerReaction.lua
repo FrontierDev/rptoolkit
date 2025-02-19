@@ -56,10 +56,14 @@ function PlayerReaction:Send_DefensiveResult(attacker, defender, result, type, s
     local message = string.format("RESULT:%s:%s:%s:%s:%s", type, attacker, defender, result, school)
     print(message)
     
-    -- Send the message to the selected channel (party or raid)
-    C_ChatInfo.SendAddonMessage(ADDON_PREFIX, message, "WHISPER", groupLeaderName)
+    if not UnitName("Player") == groupLeaderName then
+        -- Send the message to the selected channel (party or raid)
+        C_ChatInfo.SendAddonMessage(ADDON_PREFIX, message, "WHISPER", groupLeaderName)
     
-    print("Sending defensive roll result to " .. groupLeaderName .. " via WHISPER.")
+        print("Sending defensive roll result to " .. groupLeaderName .. " via WHISPER.")
+    else
+        PlayerReaction:HandleAddonMessage(message, UnitName("Player"))
+    end
 end
 
 function ReactionFrame:Prompt_MeleeDefensive(attacker, threshold, school)
@@ -276,7 +280,7 @@ end
 
 
 -- Function to handle receiving whispered addon messages
-local function HandleAddonMessage(msg, sender)
+function PlayerReaction:HandleAddonMessage(msg, sender)
     -- Split the message by ":"
     local components = {strsplit(":", msg)}
 
@@ -289,7 +293,9 @@ local function HandleAddonMessage(msg, sender)
         -- Debug
         print("Received a defensive roll result: " ..defenderName.. " - " ..result)
         
-        if UnitIsGroupLeader("player") then
+        if UnitIsGroupLeader("Player") then
+            print("Handling awaiting list...")
+
             local playerName, playerRealm = strsplit("-", sender)
             playerName = playerName or sender  -- Fallback in case the split doesn't work
 
@@ -355,5 +361,5 @@ frame:SetScript("OnEvent", function(_, event, prefix, message, _, sender)
     -- Ensure it's from the correct addon prefix
     if prefix ~= ADDON_PREFIX then return end
 
-    HandleAddonMessage(message, sender)
+    PlayerReaction:HandleAddonMessage(message, sender)
 end)

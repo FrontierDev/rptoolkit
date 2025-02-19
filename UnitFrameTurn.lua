@@ -163,7 +163,7 @@ function UnitFrameTurn:ShowTargetPopup(action, maxTargets)
             -- Display raid marker for NPCs
             local raidMarker = nil
             for _, unitFrame in pairs(_G.CampaignToolkit_UnitFrames.frames or {}) do
-                if unitFrame.NPCName and unitFrame.NPCName:GetText() == unitName then
+                if unitFrame.NPCName and unitFrame.NPCName == unitName then
                     raidMarker = unitFrame.RaidMarker and unitFrame.RaidMarker:GetTexture()
                     break
                 end
@@ -273,7 +273,7 @@ function UnitFrameTurn:UseBasicAction(action, selectedTargets)
 
     if unit.ActionsRemaining == 0 then
         print("Locking portrait; no actions remaining...")
-        UnitFrameTurn:Send_LockPortrait(unit.NPCName:GetText())
+        UnitFrameTurn:Send_LockPortrait(unit.NPCName)
     end
 end
 
@@ -374,7 +374,7 @@ function UnitFrameTurn:ShowTurnUI(unitFrame)
     TurnFrame:Show()
 
     -- Update Unit Name
-    TurnFrame.UnitName:SetText(unitFrame.NPCName:GetText())
+    TurnFrame.UnitName:SetText(unitFrame.NPCName)
 
     -- Update Raid Marker (Retrieve texture from frame)
     if unitFrame.RaidMarker and unitFrame.RaidMarker:GetTexture() then
@@ -388,7 +388,7 @@ function UnitFrameTurn:ShowTurnUI(unitFrame)
     UpdateBasicActions()
 
     -- Debug Message
-    print("UnitFrameTurn opened for:", unitFrame.NPCName:GetText())
+    print("UnitFrameTurn opened for:", unitFrame.NPCName)
 end
 
 function UnitFrameTurn:Send_LockPortrait(unitFrame)
