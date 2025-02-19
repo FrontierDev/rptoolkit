@@ -1,0 +1,30 @@
+## Interface: 90205
+## Title: Campaign Toolkit
+## Notes: Various tools for RP campaigns, designed to integrate with DiceMaster.
+## Version: 0.2.2-a
+## Author: Ortellus-ArgentDawn
+## SavedVariables: CampaignToolkitProfilesDB,CampaignToolkitCampaignsDB
+
+SpellFunctions.lua
+
+TalkingHeadSender.lua
+TalkingHeadInterface.lua
+Targeting.lua
+TurnTracker.lua
+Spellbook.lua
+CTAura.lua
+CTSpell.lua
+PlayerTurn.lua
+PlayerReaction.lua
+Equipment.lua
+CTCampaign.lua
+CampaignManager.lua
+CampaignToolkitProfiles.lua
+CharacterSheet.lua
+Dice.lua
+UnitFrames.lua
+UnitFrameTurn.lua
+UnitFrameInspect.lua
+UnitFrameEditor.lua
+ModelList.lua
+
