@@ -42,11 +42,21 @@ function Targeting:ChangePcTarget()
     -- Check if the selected target is in the player's party or raid
     if UnitInParty(targetUnit) or UnitInRaid(targetUnit) then
         Targeting.pcTarget = baseName
+    elseif UnitExists(targetUnit) and not UnitIsPlayer(targetUnit) then
+        local displayID = select(6, strsplit("-", UnitGUID("target")))
+
+        -- Handle interactions with in-game npcs...?
     end
 
     _G.RefreshActionBar()
 end
 
+function GetTargetNPCDisplayID(target)
+    if UnitExists(target) and not UnitIsPlayer(target) then
+        return UnitCreatureDisplayID(target)
+    end
+    return nil  -- Returns nil if no valid target or the target is a player
+end
 
 function Targeting:UnitIsPlayer(name)
     print("Checking unit: " ..name)

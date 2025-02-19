@@ -16,6 +16,14 @@ local function CreateUnitFrame(index)
     frame:SetPoint("TOP", UnitFrames, "TOP", 0, -((index - 1) * 65))
 
     -- Set up unit frame variables and their default values.
+    frame.NPCName = ""          -- The name of the npc.
+    frame.NPCID = 17227         -- The display model of the npc. Defaults to 17227
+    frame.ModelPosition = {
+        x = 2,
+        y = 0,
+        z = -0.5
+    }
+
     frame.CurrentHealth = 100
     frame.MaxHealth = 100
     frame.ActionsRemaining = 2
@@ -30,8 +38,12 @@ local function CreateUnitFrame(index)
     frame.DefensiveAC = {
         Melee = 15,
         Ranged = 15,
-        Spell = 25
+        Spell = 15
     }
+
+    frame.Auras = {}
+    frame.BuffCount = 0
+    frame.DebuffCount = 0
 
     -- Background
     frame:SetBackdrop({
@@ -46,7 +58,7 @@ local function CreateUnitFrame(index)
     frame.Portrait:SetSize(40, 40)
     frame.Portrait:SetPoint("LEFT", frame, "LEFT", 10, 10)
     frame.Portrait:SetDisplayInfo(17227)  -- Placeholder NPC ID
-    frame.Portrait:SetPosition(2, 0, -0.5)  -- Adjust model positioning
+    frame.Portrait:SetPosition(frame.ModelPosition["x"], frame.ModelPosition["y"], frame.ModelPosition["z"])  -- Adjust model positioning
 
     -- Raid Marker
     frame.RaidMarker = frame:CreateTexture(nil, "ARTWORK")
@@ -97,23 +109,20 @@ local function CreateUnitFrame(index)
     frame.HealthText:SetTextColor(1, 1, 1, 1)  -- White Color
 
     -- NPC Name (Above Health Bar)
-    frame.NPCName = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    frame.NPCName:SetPoint("LEFT", frame.RaidMarker, "RIGHT", 5, 1)
+    frame.NPCNameLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    frame.NPCNameLabel:SetPoint("LEFT", frame.RaidMarker, "RIGHT", 5, 1)
 
     -- Assign Default Name if No Name is Provided
-    if not frame.NPCName:GetText() or frame.NPCName:GetText() == "" then
+    if not frame.NPCNameLabel:GetText() or frame.NPCNameLabel:GetText() == "" then
         unnamedNPCCount = unnamedNPCCount + 1
-        frame.NPCName:SetText("Unit Frame [" .. unnamedNPCCount .. "]")
+        frame.NPCNameLabel:SetText("Unit Frame [" .. unnamedNPCCount .. "]")
+        frame.NPCName = "Unit Frame [" .. unnamedNPCCount .. "]"
     end
 
     -- Aura Container
     frame.AuraContainer = CreateFrame("Frame", nil, frame)
     frame.AuraContainer:SetSize(100, 16)
     frame.AuraContainer:SetPoint("LEFT", frame, "RIGHT", 5, 0)
-
-    frame.Auras = {}
-    frame.BuffCount = 0
-    frame.DebuffCount = 0
 
     -- Function to Update Auras
     function frame:AddAura(newAuras)
@@ -258,7 +267,6 @@ local function CreateUnitFrame(index)
         frame.TestCastButton:SetScript("OnClick", function()
             local testSpell = "Fireball"
             local testDuration = 3  -- Default to 5 ticks if NumBatches is unavailable
-            print("🧪 Starting test cast: " .. testSpell .. " (" .. testDuration .. " ticks)")
             frame:StartCasting(testSpell, testDuration)
         end)
     end
@@ -318,12 +326,9 @@ local function CreateUnitFrame(index)
         if UnitIsGroupLeader("player") or not IsInGroup() then
             frame:SetAlpha(frame.isVisible and 1 or 0.5)  -- Set to 50% opacity if hidden
 
-            print(frame.NPCName)
-            print(Targeting.npcTarget)
-            if frame.NPCName:GetText() == Targeting.npcTarget then
+            if frame.NPCNameLabel:GetText() == Targeting.npcTarget then
                 -- If the target is the same, clear it and reset the background color
                 Targeting:ChangeNpcTarget("NONE")
-                print("NPC target cleared.")
             
                 frame.background:SetColorTexture(0, 0, 0, 0)  -- Reset to original color
             end
@@ -333,7 +338,7 @@ local function CreateUnitFrame(index)
         if IsInGroup() and UnitIsGroupLeader("player") then
             local frameID = frame:GetName()
             local visibilityState = frame.isVisible and "SHOW" or "HIDE"
-            local message = string.format("%s;%s", frameID, visibilityState)
+            local message = string.format("VIS:%s;%s", frameID, visibilityState)
             local channel = IsInRaid() and "RAID" or "PARTY"
             C_ChatInfo.SendAddonMessage(ADDON_PREFIX, message, channel)
         end
@@ -378,6 +383,7 @@ for i = 1, 8 do
     end)
 end
 
+-- Reorders unit frames to ensure there are no gaps.
 local function ReorderUnitFrames()
     local yOffset = 0
     for _, frame in ipairs(UnitFrames.frames) do
@@ -419,7 +425,7 @@ local function OnGroupUpdate()
     end
 end
 
-
+-- Updates the give unit frame (direct reference) with the given data.
 local function UpdateUnitFrame(frame, data)
     -- Set Raid Marker
     if frame.RaidMarker then
@@ -447,12 +453,14 @@ local function UpdateUnitFrame(frame, data)
     end
 
     -- Apply NPC Name
-    if frame.NPCName then
-        if not data.npcName or data.npcName == "" then
+    if frame.NPCNameLabel then
+        if not data.NPCNameLabel or data.NPCNameLabel == "" then
             unnamedNPCCount = unnamedNPCCount + 1
-            frame.NPCName:SetText("Unit Frame [" .. unnamedNPCCount .. "]")
+            frame.NPCNameLabel:SetText("Unit Frame [" .. unnamedNPCCount .. "]")
+            frame.NPCName = frame.NPCNameLabel:GetText()
         else
-            frame.NPCName:SetText(data.npcName)
+            frame.NPCNameLabel:SetText(data.NPCNameLabel)
+            frame.NPCName = frame.NPCNameLabel:GetText()
         end
     end
 
@@ -460,10 +468,11 @@ local function UpdateUnitFrame(frame, data)
     ReorderUnitFrames()
 end
 
+-- Called when the active batch changes and highlights all npcs taking their turns in yellow.
 function UnitFrames:HighlightActiveBatch(activeBatch)
     for _, frame in pairs(UnitFrames.frames) do
-        if frame and frame.NPCName then
-            local unitName = strtrim(frame.NPCName:GetText() or "")
+        if frame and frame.NPCNameLabel then
+            local unitName = strtrim(frame.NPCNameLabel:GetText() or "")
 
             -- Check if the unit is in the active batch
             local isActive = false
@@ -476,18 +485,19 @@ function UnitFrames:HighlightActiveBatch(activeBatch)
 
             -- Change name color based on active status
             if isActive then
-                frame.NPCName:SetTextColor(1, 1, 0) -- Yellow for active turn
+                frame.NPCNameLabel:SetTextColor(1, 1, 0) -- Yellow for active turn
             else
-                frame.NPCName:SetTextColor(1, 1, 1) -- White for inactive
+                frame.NPCNameLabel:SetTextColor(1, 1, 1) -- White for inactive
             end
         end
     end
 end
 
+-- Called when the active batch changes. Causes the NPC turn button to show on any npc whose turn it now is.
 function UnitFrames:UpdateNpcTurnButtons(activeBatch)
     for _, frame in pairs(UnitFrames.frames) do
-        if frame and frame.NPCName then
-            local unitName = strtrim(frame.NPCName:GetText() or "")
+        if frame and frame.NPCNameLabel then
+            local unitName = strtrim(frame.NPCNameLabel:GetText() or "")
 
             -- Check if the unit is in the active batch
             local isActive = false
@@ -529,12 +539,6 @@ function UnitFrames:UpdateNpcTurnButtons(activeBatch)
     end
 end
 
-
-
-
-
-
-
 -- Example: Assigning random data for testing
 for i, frame in ipairs(UnitFrames.frames) do
     local defaultData = {
@@ -557,8 +561,8 @@ UnitFrames:SetScript("OnDragStop", function(self)
     self:StopMovingOrSizing()
 end)
 
+-- Called when the turn batch changes and causes all active spell bars to tick up.
 function UnitFrames:AdvanceSpellcastBars()
-    print("Advancing spellcast bars...")
     for _, frame in pairs(UnitFrames.frames) do
         if frame.CastingBar and frame.CastingBar:IsShown() then
             local currentTick = frame.CastingBar:GetValue() + 1  -- Advance by 1 tick
@@ -570,7 +574,7 @@ function UnitFrames:AdvanceSpellcastBars()
 
             -- Check if casting is complete
             if currentTick >= maxTicks then
-                print("✅ Casting Complete: " .. frame.CastingText:GetText() .. " for " .. frame.NPCName:GetText())
+                print("Casting Complete: " .. frame.CastingText:GetText() .. " for " .. frame.NPCNameLabel:GetText())
 
                 -- Reset cast bar & text
                 frame.CastingBar:Hide()
@@ -593,21 +597,20 @@ end
 
 -- Called when a unit frame aura is applied or removed
 local function Handle_AddAura(data)
-    print("Handling call to add aura...")
     local args = { strsplit(";", data) }
     local targetUnit, auraGuid, sender = args[1], args[2], args[3]
 
     -- Ensure the target unit exists by matching against frame names
     local targetFrame = nil
     for _, frame in pairs(UnitFrames.frames) do
-        if frame.NPCName and frame.NPCName:GetText() == targetUnit then
+        if frame.NPCNameLabel and frame.NPCNameLabel:GetText() == targetUnit then
             targetFrame = frame
             break
         end
     end
 
     if not targetFrame then 
-        print("ERROR: Target frame for", targetUnit, "not found in UnitFrames.frames!")
+        print("|cffff0000Error: Target frame for", targetUnit, "not found in UnitFrames.frames.|r")
         return 
     end
 
@@ -615,10 +618,7 @@ local function Handle_AddAura(data)
     local auraData = nil
     for _, campaign in pairs(_G.CampaignToolkitCampaignsDB) do
         if campaign.AuraList then  -- Ensure the campaign has an AuraList
-            print("Checking campaign: " ..campaign.Name)
             for _, aura in pairs(campaign.AuraList) do
-                print("... checking against " ..aura.Guid)
-
                 if aura.Guid == auraGuid then
                     auraData = aura
                     break
@@ -645,9 +645,8 @@ local function Handle_AddAura(data)
     })
 end
 
+-- Called when a player begins their turn, and causes any auras that they have cast to tick down.
 function UnitFrames:UpdateAuraTurns(caster, auraGuid)
-    print("Ticking aura " .. auraGuid .. " for " .. caster)
-
     local expiredAuras = {}  -- Store expired auras along with their parent frame
 
     -- ✅ First pass: Update all auras (DO NOT remove them yet)
@@ -676,8 +675,6 @@ function UnitFrames:UpdateAuraTurns(caster, auraGuid)
 end
 
 function UnitFrames:RedrawAllAuras()
-    print("🔄 Redrawing auras for all frames...")
-
     for _, frame in pairs(UnitFrames.frames) do
         if frame.AuraContainer then
             -- ✅ Step 1: Clear the Auras list and reset Buff/Debuff counters
@@ -717,8 +714,6 @@ function UnitFrames:RedrawAllAuras()
             end
         end
     end
-
-    print("✅ Aura redraw complete!")
 end
 
 -- Called when a unit frame is aura is applied or removed
@@ -731,21 +726,21 @@ end
 -- Called when unit frame data needs to be synced across party members.
 local function Handle_Sync(data)
     local args = { strsplit(";", data) }
-    local frameID, visibilityState, npcName, npcID, currentHealth, maxHealth =
-        args[1], args[2], args[3], tonumber(args[4]), tonumber(args[5]), tonumber(args[6])
+    local frameID, visibilityState, npcName, npcID, currentHealth, maxHealth, modelX, modelY, modelZ =
+        args[1], args[2], args[3], tonumber(args[4]), tonumber(args[5]), tonumber(args[6]), tonumber(args[7]), tonumber(args[8]), tonumber(args[9])
 
     if not frameID then return end
 
     local frame = _G[frameID]
     if frame then
+        -- Sync unit frame visibility
         frame.isVisible = (visibilityState == "SHOW")
 
         if frame.isVisible ~= isVisible then
             UpdateGroupMembers()  -- Ensure TurnTracker is updated with the new visibility
         end
 
-        if not frame.isVisible and Targeting.npcTarget == frame.NPCName:GetText() then
-            print("Frame visiblity changed, clearing target.")
+        if not frame.isVisible and Targeting.npcTarget == frame.NPCNameLabel:GetText() then
             Targeting:ChangeNpcTarget("NONE")
             frame.background:SetColorTexture(0, 0, 0, 0)  -- Reset to original color
         end
@@ -754,6 +749,7 @@ local function Handle_Sync(data)
             frame:SetShown(frame.isVisible)
         end
 
+        -- Sync edit button visibility
         if frame.EditButton then
             if UnitIsGroupLeader("player") then
                 frame.EditButton:Show()
@@ -764,11 +760,28 @@ local function Handle_Sync(data)
 
         -- Apply NPC Name
         if frame.NPCName and npcName then
-            frame.NPCName:SetText(npcName)
+            frame.NPCName = npcName
+            frame.NPCNameLabel:SetText(frame.NPCName)
+        end
 
-            if frame.npcName ~= npcName then
-                
+        -- Apply NPC model
+        if frame.NPCID and npcID then
+            frame.NPCID = npcID
+            frame.Portrait:SetDisplayInfo(frame.NPCID)
+
+            if frame.ModelPosition and modelX then
+                frame.ModelPosition["x"] = modelX
             end
+
+            if frame.ModelPosition and modelY then
+                frame.ModelPosition["y"] = modelY
+            end
+
+            if frame.ModelPosition and modelZ then
+                frame.ModelPosition["z"] = modelZ
+            end
+
+            frame.Portrait:SetPosition(modelX, modelY, modelZ)
         end
 
         -- Apply Health Values
@@ -830,6 +843,32 @@ local function Handle_DamagePlayer(data)
     end
 end
 
+local function Handle_Visibility(data)
+    -- Only call this function on the client side.
+    if UnitIsGroupLeader("Player") then return end
+
+    -- Split the data string into components using ";" as delimiter
+    local args = { strsplit(";", data) }
+    local frameID, visibilityState = args[1], args[2]
+
+    local frame = _G[frameID]
+    if frame then
+        frame.isVisible = (visibilityState == "SHOW")
+
+        if frame.isVisible then 
+            frame:Show() 
+        else 
+            frame:Hide() 
+        end
+
+        ReorderUnitFrames()
+
+        if not frame.isVisible and Targeting.npcTarget == frame.NPCNameLabel:GetText() then
+            Targeting:ChangeNpcTarget("NONE")
+            frame.background:SetColorTexture(0, 0, 0, 0)  -- Reset to original color
+        end
+    end
+end
 
 local function OnAddonMessage(self, event, prefix, message, sender)
     if prefix ~= ADDON_PREFIX then return end  -- Ignore unrelated messages
@@ -842,7 +881,10 @@ local function OnAddonMessage(self, event, prefix, message, sender)
 
     -- Handle all other inputs.
     local data = message
-    if string.sub(message, 1, 5) == "SYNC:" then
+    if string.sub(message, 1, 4) == "VIS:" then
+        data = string.sub(message, 5)
+        Handle_Visibility(data)
+    elseif string.sub(message, 1, 5) == "SYNC:" then
         data = string.sub(message, 6)
         Handle_Sync(data)
     elseif string.sub(message, 1, 7) == "DAMAGE:" then
@@ -864,17 +906,14 @@ end
 -- Function to handle unit frame clicks, i.e., for targeting a unit frame.
 local function OnUnitFrameClick(self, button)
     -- Set npcTarget to the name of the NPC in the clicked unit frame
-    local npcTarget = self.NPCName:GetText()
+    local npcTarget = self.NPCNameLabel:GetText()
 
     -- Check if the target is already selected, and clear it if clicked again
     if Targeting then
-        print("Current Target: " .. Targeting.npcTarget .. " | New target: " .. npcTarget)
-
         if npcTarget == Targeting.npcTarget then
             -- If the target is the same, clear it and reset the background color
             Targeting:ChangeNpcTarget("NONE")
-            print("NPC target cleared.")
-            
+
             -- Reset the background color of all frames
             for _, frame in ipairs(UnitFrames.frames) do
                 if frame.background then
@@ -885,10 +924,9 @@ local function OnUnitFrameClick(self, button)
         else
             -- If it's a new target, set it and change the background color of the clicked frame
             Targeting:ChangeNpcTarget(npcTarget)
-            print("NPC target is now: " .. npcTarget)
         end
     else
-        print("Targetting module not loaded yet.")
+        print("|cffff0000Error: Targetting module not loaded yet.|r")
     end
 
     -- Reset the background color change from previously selected unit frames
@@ -924,17 +962,16 @@ function UnitFrames:DamagePlayer(unitFrame, player, type)
 
     -- Find the corresponding unit frame
     for _, frame in pairs(UnitFrames.frames) do
-        if frame.NPCName and frame.NPCName:GetText() == unitFrame then
-            print("DAMAGING " ..player.. " from " ..unitFrame)
+        if frame.NPCNameLabel and frame.NPCNameLabel:GetText() == unitFrame then
+            --print("DAMAGING " ..player.. " from " ..unitFrame)
 
-            print(typeFormatted)
             local dice = frame.OffensiveModifiers[typeFormatted].damageDice
             local bonus = frame.OffensiveModifiers[typeFormatted].attackBonus
             local school = frame.OffensiveModifiers[typeFormatted].school
 
 
             local damage = Dice.Simple(string.format("%s+%s", dice, bonus))
-            print("... dealing " ..dice.. "+" ..bonus.. " = " ..damage.. " damage.")
+            -- print("... dealing " ..dice.. "+" ..bonus.. " = " ..damage.. " damage.")
 
             local message = string.format("%s;%s;%s;%s", unitFrame, player, damage, school)
 
@@ -948,17 +985,17 @@ end
 -- Called from Targeting.lua (which gets the correct target(s) to damage.)
 function UnitFrames:ApplyDamage(targetUnit, damage, school)
     if not targetUnit or targetUnit == "NONE" then
-        print("No valid target selected.")
+        print("|cffff0000Error: No valid target selected.|r")
         return
     end
 
     -- Find the corresponding unit frame
     for _, frame in pairs(UnitFrames.frames) do
-        if frame.NPCName and frame.NPCName:GetText() == targetUnit then
+        if frame.NPCNameLabel and frame.NPCNameLabel:GetText() == targetUnit then
             frame.CurrentHealth = math.max(frame.CurrentHealth - damage, 0)
             frame.HealthBar:SetValue(frame.CurrentHealth)
             frame.HealthText:SetText(frame.CurrentHealth)
-            print(targetUnit .. " takes " .. damage .. " " .. school .. "damage!")
+            --print(targetUnit .. " takes " .. damage .. " " .. school .. "damage!")
 
             -- Optionally handle unit death
             if frame.CurrentHealth <= 0 then
@@ -968,7 +1005,7 @@ function UnitFrames:ApplyDamage(targetUnit, damage, school)
         end
     end
 
-    print("Unit frame not found for target: " .. targetUnit)
+    print("|cffff0000Error: Unit frame not found for target: " .. targetUnit.. "|r")
 end
 
 -- Used by all players (group leader or otherwise) to broadcast the damage they have dealt to a unit frame.
@@ -1013,18 +1050,57 @@ function UnitFrames:BroadcastUnitFrameSync()
             local frameID = frame:GetName() or "Unknown"
             local visibilityState = frame.isVisible and "SHOW" or "HIDE"
             local editButtonState = frame.EditButton and frame.EditButton:IsShown() and "1" or "0"
-            local npcID = frame.npcID or "0"
-            local npcName = frame.NPCName:GetText() or "Unknown"
+            local npcID = frame.NPCID or "17227"
+            local npcName = frame.NPCName or "Unknown"
             local currentHealth = frame.CurrentHealth or 100
             local maxHealth = frame.MaxHealth or 100
+            local modelX = frame.ModelPosition["x"]
+            local modelY = frame.ModelPosition["y"]
+            local modelZ = frame.ModelPosition["z"]
 
-            local message = string.format("%s;%s;%s;%d;%d;%d;%d;%d", 
-                frameID, visibilityState, npcName, npcID, 
-                currentHealth, maxHealth)
+            local message = string.format("SYNC:%s;%s;%s;%d;%d;%d;%f;%f;%f", 
+                frameID, visibilityState, npcName, npcID, currentHealth, maxHealth, modelX, modelY, modelZ)
 
             local channel = IsInRaid() and "RAID" or "PARTY"
-            C_ChatInfo.SendAddonMessage(ADDON_PREFIX, "SYNC:" .. message, channel)
+            print("... " ..message)
+            C_ChatInfo.SendAddonMessage(ADDON_PREFIX, message, channel)
         end
+    end
+end
+
+function UnitFrames:Sync_UnitFrame(frame)
+    if not IsInGroup() or not UnitIsGroupLeader("player") then return end
+
+    if frame then
+        local frameID = frame:GetName() or "Unknown"
+        local visibilityState = frame.isVisible and "SHOW" or "HIDE"
+        local editButtonState = frame.EditButton and frame.EditButton:IsShown() and "1" or "0"
+        local npcID = frame.NPCID or "17227"
+        local npcName = frame.NPCName or "Unknown"
+        local currentHealth = frame.CurrentHealth or 100
+        local maxHealth = frame.MaxHealth or 100
+        local modelX = frame.ModelPosition["x"]
+        local modelY = frame.ModelPosition["y"]
+        local modelZ = frame.ModelPosition["z"]
+
+        local message = string.format("SYNC:%s;%s;%s;%d;%d;%d;%f;%f;%f", 
+            frameID, visibilityState, npcName, npcID, currentHealth, maxHealth, modelX, modelY, modelZ)
+
+        local channel = IsInRaid() and "RAID" or "PARTY"
+        print("... " ..message)
+        C_ChatInfo.SendAddonMessage(ADDON_PREFIX, message, channel)
+    end
+end
+
+function UnitFrames:HideAllUnitFrames()
+    for _, frame in pairs(UnitFrames.frames) do
+        frame:Hide()
+    end
+end
+
+function UnitFrames:ShowAllUnitFrames()
+    for _, frame in pairs(UnitFrames.frames) do
+        if frame.isVisible then frame:Show() end
     end
 end
 
@@ -1046,6 +1122,4 @@ end)
 
 -- Store globally for debugging
 _G.CampaignToolkit_UnitFrames = UnitFrames
-
-_G.AssignActionsToUnitFrame = AssignActionsToUnitFrame
 

@@ -426,14 +426,131 @@ local function CreateDefensiveAC(frame)
     end)
 end
 
+-- Function to create the Position button and open the model position window on click
+local function CreatePositionButton(frame)
+    -- Create the Position window with sliders for model position
+    local PositionWindow = CreateFrame("Frame", "PositionWindow", frame, "BackdropTemplate")
+    PositionWindow:SetSize(220, 180)  -- Increased height for the labels
+    PositionWindow:SetPoint("LEFT", frame, "RIGHT", 10, 0)
+    PositionWindow:SetBackdrop({
+        bgFile = "Interface/DialogFrame/UI-DialogBox-Background",
+        edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
+        tile = true, tileSize = 16, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 }
+    })
+    frame.PositionWindow = PositionWindow
+    PositionWindow:Show()
 
--- Refactored PopulateStatisticsTab
+    -- Position window title
+    PositionWindow.Title = PositionWindow:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    PositionWindow.Title:SetPoint("TOP", PositionWindow, "TOP", 0, -10)
+    PositionWindow.Title:SetText("Model Position")
+
+    -- Create sliders for x, y, z
+    local modelPosition = EditorFrame.SelectedFrame.ModelPosition
+
+    -- X Position Slider
+    PositionWindow.XSliderLabel = PositionWindow:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    PositionWindow.XSliderLabel:SetPoint("TOPLEFT", PositionWindow, "TOPLEFT", 15, -25)
+    PositionWindow.XSliderLabel:SetText("X Position:")
+
+    PositionWindow.XSlider = CreateFrame("Slider", nil, PositionWindow, "OptionsSliderTemplate")
+    PositionWindow.XSlider:SetMinMaxValues(-5, 5)
+    PositionWindow.XSlider:SetValueStep(0.1)  -- Set discrete steps of 0.1
+    PositionWindow.XSlider:SetValue(modelPosition.x)
+    PositionWindow.XSlider:SetPoint("TOPLEFT", PositionWindow.XSliderLabel, "BOTTOMLEFT", 0, 0)
+
+    -- X Position Value Label
+    PositionWindow.XPositionValue = PositionWindow:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    PositionWindow.XPositionValue:SetPoint("LEFT", PositionWindow.XSlider, "RIGHT", 10, 0)
+    PositionWindow.XPositionValue:SetText(modelPosition.x)
+
+    -- Y Position Slider
+    PositionWindow.YSliderLabel = PositionWindow:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    PositionWindow.YSliderLabel:SetPoint("TOPLEFT", PositionWindow.XSliderLabel, "BOTTOMLEFT", 0, -30)
+    PositionWindow.YSliderLabel:SetText("Y Position:")
+
+    PositionWindow.YSlider = CreateFrame("Slider", nil, PositionWindow, "OptionsSliderTemplate")
+    PositionWindow.YSlider:SetMinMaxValues(-5, 5)
+    PositionWindow.YSlider:SetValueStep(0.1)  -- Set discrete steps of 0.1
+    PositionWindow.YSlider:SetValue(modelPosition.y)
+    PositionWindow.YSlider:SetPoint("TOPLEFT", PositionWindow.YSliderLabel, "BOTTOMLEFT", 0, 0)
+
+    -- Y Position Value Label
+    PositionWindow.YPositionValue = PositionWindow:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    PositionWindow.YPositionValue:SetPoint("LEFT", PositionWindow.YSlider, "RIGHT", 10, 0)
+    PositionWindow.YPositionValue:SetText(modelPosition.y)
+
+    -- Z Position Slider
+    PositionWindow.ZSliderLabel = PositionWindow:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    PositionWindow.ZSliderLabel:SetPoint("TOPLEFT", PositionWindow.YSliderLabel, "BOTTOMLEFT", 0, -30)
+    PositionWindow.ZSliderLabel:SetText("Z Position:")
+
+    PositionWindow.ZSlider = CreateFrame("Slider", nil, PositionWindow, "OptionsSliderTemplate")
+    PositionWindow.ZSlider:SetMinMaxValues(-5, 5)
+    PositionWindow.ZSlider:SetValueStep(0.1)  -- Set discrete steps of 0.1
+    PositionWindow.ZSlider:SetValue(modelPosition.z)
+    PositionWindow.ZSlider:SetPoint("TOPLEFT", PositionWindow.ZSliderLabel, "BOTTOMLEFT", 0, 0)
+
+    -- Z Position Value Label
+    PositionWindow.ZPositionValue = PositionWindow:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    PositionWindow.ZPositionValue:SetPoint("LEFT", PositionWindow.ZSlider, "RIGHT", 10, 0)
+    PositionWindow.ZPositionValue:SetText(modelPosition.z)
+
+    -- Create a separate portrait preview window next to the main editor frame
+    local PortraitPreviewWindow = CreateFrame("Frame", "PortraitPreviewWindow", frame, "BackdropTemplate")
+    PortraitPreviewWindow:SetSize(120, 120)  -- Set the size for the preview window
+    PortraitPreviewWindow:SetPoint("TOPLEFT", PositionWindow, "BOTTOMLEFT", 0, -5)  -- Position it next to PositionWindow
+    PortraitPreviewWindow:SetBackdrop({
+        bgFile = "Interface/DialogFrame/UI-DialogBox-Background",
+        edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
+        tile = true, tileSize = 16, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 }
+    })
+    frame.PreviewWindow = PortraitPreviewWindow
+    PortraitPreviewWindow:Show()
+    
+    -- Portrait preview inside the window
+    PortraitPreviewWindow.PortraitPreview = CreateFrame("PlayerModel", nil, PortraitPreviewWindow)
+    PortraitPreviewWindow.PortraitPreview:SetSize(100, 100)  -- Set the size of the preview
+    PortraitPreviewWindow.PortraitPreview:SetPoint("CENTER", PortraitPreviewWindow, "CENTER", 0, 0)
+
+    -- Set the model's position based on the sliders' values
+    PortraitPreviewWindow.PortraitPreview:SetDisplayInfo(EditorFrame.SelectedFrame.NPCID)
+    PortraitPreviewWindow.PortraitPreview:SetPosition(EditorFrame.SelectedFrame.ModelPosition.x, EditorFrame.SelectedFrame.ModelPosition.y, EditorFrame.SelectedFrame.ModelPosition.z)  -- Default position at the center
+
+    -- Update the position of the portrait preview when sliders change
+    PositionWindow.XSlider:SetScript("OnValueChanged", function(self, value)
+        EditorFrame.SelectedFrame.ModelPosition.x = value
+        PositionWindow.XPositionValue:SetText(string.format("%.1f", value))  -- Update X Position Label
+        PortraitPreviewWindow.PortraitPreview:SetPosition(value, EditorFrame.SelectedFrame.ModelPosition.y, EditorFrame.SelectedFrame.ModelPosition.z)  -- Update portrait position
+    end)
+
+    PositionWindow.YSlider:SetScript("OnValueChanged", function(self, value)
+        EditorFrame.SelectedFrame.ModelPosition.y = value
+        PositionWindow.YPositionValue:SetText(string.format("%.1f", value))  -- Update Y Position Label
+        PortraitPreviewWindow.PortraitPreview:SetPosition(EditorFrame.SelectedFrame.ModelPosition.x, value, EditorFrame.SelectedFrame.ModelPosition.z)  -- Update portrait position
+    end)
+
+    PositionWindow.ZSlider:SetScript("OnValueChanged", function(self, value)
+        EditorFrame.SelectedFrame.ModelPosition.z = value
+        PositionWindow.ZPositionValue:SetText(string.format("%.1f", value))  -- Update Z Position Label
+        PortraitPreviewWindow.PortraitPreview:SetPosition(EditorFrame.SelectedFrame.ModelPosition.x, EditorFrame.SelectedFrame.ModelPosition.y, value)  -- Update portrait position
+    end)
+end
+
 local function PopulateStatisticsTab()
     local frame = EditorFrame.TabFrames[1]
 
-    -- Create Input Fields
-    frame.NameInput = CreateInputField(frame, "Unit Name:", -40, 150, false)
-    frame.NPCIDInput = CreateInputField(frame, "NPC ID:", -70, 100, true)
+    -- Create the NameInput field only if it hasn't been created already
+    if not frame.NameInput then
+        frame.NameInput = CreateInputField(frame, "Unit Name:", -40, 150, false)
+    end
+
+    -- Create NPC ID input field if it hasn't been created already
+    if not frame.NPCIDInput then
+        frame.NPCIDInput = CreateInputField(frame, "NPC ID:", -70, 100, true)
+    end
 
     -- Create UI Sections
     CreateAbilityScoreModifiers(frame)
@@ -441,8 +558,6 @@ local function PopulateStatisticsTab()
     CreateDefensiveAC(frame)
 end
 
--- Call the function to populate the Statistics tab
-PopulateStatisticsTab()
 
 -- Function to Populate Spells Tab
 local function PopulateSpellsTab()
@@ -459,7 +574,7 @@ local function PopulateLootTab()
 end
 
 -- Populate Tabs
--- PopulateStatisticsTab()
+PopulateStatisticsTab()
 PopulateSpellsTab()
 PopulateLootTab()
 
@@ -478,10 +593,19 @@ local function ShowApplyButton()
         local unitFrame = EditorFrame.SelectedFrame
 
         -- Store Unit Name
-        unitFrame.UnitName = EditorFrame.TabFrames[1].NameInput:GetText()
+        unitFrame.NPCName = EditorFrame.TabFrames[1].NameInput:GetText()
 
         -- Store NPC ID
-        unitFrame.NPCID = tonumber(EditorFrame.TabFrames[1].NPCIDInput:GetText()) or 0
+        unitFrame.NPCID = tonumber(EditorFrame.TabFrames[1].NPCIDInput:GetText()) or 17227
+
+        -- Store NPC Position in Window
+        unitFrame.ModelPosition["x"] = tonumber(EditorFrame.TabFrames[1].PositionWindow.XSlider:GetValue())
+        print("Model X Position: " ..unitFrame.ModelPosition["x"])
+        unitFrame.ModelPosition["y"] = tonumber(EditorFrame.TabFrames[1].PositionWindow.YSlider:GetValue())
+        print("Model Y Position: " ..unitFrame.ModelPosition["y"])
+        unitFrame.ModelPosition["z"] = tonumber(EditorFrame.TabFrames[1].PositionWindow.ZSlider:GetValue())
+        print("Model Z Position: " ..unitFrame.ModelPosition["z"])
+
 
         -- Store Ability Modifiers
         unitFrame.AbilityModifiers = {}
@@ -524,8 +648,15 @@ local function ShowApplyButton()
             print(" - " .. stat .. " AC: " .. value)
         end
 
+        -- Send the sync message
+        print("Sending sync message...")
+        UnitFrames:Sync_UnitFrame(unitFrame)
+
         -- Close the editor after applying changes
         EditorFrame:Hide()
+        PositionWindow:Hide()
+        PortraitPreviewWindow:Hide()
+
     end)
 
     EditorFrame.ApplyButton:Show()
@@ -533,21 +664,106 @@ end
 
 ShowApplyButton()
 
--- Function to Show the Editor and Load Data from a Unit Frame
+local function UpdateAbilityModifiers(frame, unitFrame)
+    -- Update Ability Scores section with values from unitFrame (for example)
+    for _, ability in ipairs(unitFrame.AbilityModifiers) do
+        local abilityFrame = frame.AbilityModifiers[ability.name]
+        if abilityFrame then
+            abilityFrame.text:SetText(ability.value)  -- Update the ability modifier value
+        end
+    end
+end
+
+local function UpdateDefensiveAC(frame, unitFrame)
+    -- Update Defensive AC section
+    for stat, acValue in pairs(unitFrame.DefensiveAC) do
+        local acFrame = frame.DefensiveAC[stat]
+        if acFrame then
+            acFrame.text:SetText(acValue)  -- Update the AC value
+        end
+    end
+end
+
+
+local function UpdateOffensiveModifiers(frame, unitFrame)
+    -- Update Offensive Modifiers section
+    for stat, modifiers in pairs(unitFrame.OffensiveModifiers) do
+        local modifierFrame = frame.OffensiveModifiers[stat]
+        if modifierFrame then
+            modifierFrame.text:SetText(modifiers.damageDice .. "+" .. modifiers.attackBonus)  -- Update Damage Dice and Bonus
+            modifierFrame.ac = modifiers.ac  -- Update AC value
+        end
+    end
+end
+
+-- Function to update position sliders and the model preview
+local function UpdatePositionSlider(frame, unitFrame)
+    -- Update sliders with the current position values
+    frame.PositionWindow.XSlider:SetValue(unitFrame.ModelPosition["x"])
+    frame.PositionWindow.YSlider:SetValue(unitFrame.ModelPosition["y"])
+    frame.PositionWindow.ZSlider:SetValue(unitFrame.ModelPosition["z"])
+
+    print(string.format("Updating position: X: %.1f, Y: %.1f, Z: %.1f", 
+        unitFrame.ModelPosition["x"], unitFrame.ModelPosition["y"], unitFrame.ModelPosition["z"]))
+
+    -- Ensure PortraitPreviewWindow and PositionWindow are initialized
+    if PortraitPreviewWindow and PortraitPreviewWindow.PortraitPreview then
+        -- Set the model display info
+        PortraitPreviewWindow.PortraitPreview:SetDisplayInfo(unitFrame.NPCID)
+        -- Update the model position based on sliders
+        PortraitPreviewWindow.PortraitPreview:SetPosition(
+            frame.PositionWindow.XSlider:GetValue(),
+            frame.PositionWindow.YSlider:GetValue(),
+            frame.PositionWindow.ZSlider:GetValue()
+        )
+    else
+        print("PortraitPreviewWindow or PositionWindow not initialized properly.")
+    end
+end
+
+-- Function to show the editor window and update content
 function UnitFrameEditor:ShowEditor(unitFrame)
     if not unitFrame then return end
+
+    EditorFrame.SelectedFrame = unitFrame
+
+    -- Ensure the editor frame is initialized
+    if not EditorFrame:IsShown() then
+        EditorFrame:Show()  -- Make sure the editor window is visible
+    end
+
+    -- Initialize default tables if they don't exist (to avoid `nil` errors)
+    unitFrame.AbilityModifiers = unitFrame.AbilityModifiers or {}
+    unitFrame.OffensiveModifiers = unitFrame.OffensiveModifiers or {}
+    unitFrame.DefensiveAC = unitFrame.DefensiveAC or {}
+
+    -- Update existing input fields with data from unitFrame
+    EditorFrame.TabFrames[1].NameInput:SetText(unitFrame.NPCName or "")
+    EditorFrame.TabFrames[1].NPCIDInput:SetText(unitFrame.NPCID or "")
+
+    -- Update the Ability Modifiers, Offensive Modifiers, and Defensive AC sections
+    UpdateAbilityModifiers(EditorFrame.TabFrames[1], unitFrame)
+    UpdateOffensiveModifiers(EditorFrame.TabFrames[1], unitFrame)
+    UpdateDefensiveAC(EditorFrame.TabFrames[1], unitFrame)
 
     -- Ensure the editor is visible
     EditorFrame:Show()
 
-    -- Load NPC Name and Model ID if available
-    local npcName = unitFrame.NPCName and unitFrame.NPCName:GetText() or "Unknown"
-    local npcModelID = unitFrame.Portrait and unitFrame.Portrait:GetDisplayInfo() or 0
+    -- Create the Position Button and Position Window if not created
+    if not PositionWindow or not PortraitPreviewWindow then
+        CreatePositionButton(EditorFrame.TabFrames[1])
+    else
+        PositionWindow:Show()
+        PortraitPreviewWindow:Show()
+    end
 
-    -- Debug messages
-    print("Opening Unit Frame Editor for:", npcName, "\nModel ID:", npcModelID)
+    -- Now update the sliders and the portrait preview
+    UpdatePositionSlider(EditorFrame.TabFrames[1], unitFrame)
 
-    -- Store the selected unit frame for later modifications
-    EditorFrame.SelectedFrame = unitFrame
+    -- Debug messages for confirming initialization
+    print("Opening Unit Frame Editor for:", unitFrame.NPCName, "\nModel ID:", unitFrame.NPCID)
 end
+
+
+
 

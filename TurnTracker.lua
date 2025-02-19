@@ -158,7 +158,7 @@ local function UpdateGroupMembers()
     if _G.CampaignToolkit_UnitFrames and _G.CampaignToolkit_UnitFrames.frames then
         for _, frame in ipairs(_G.CampaignToolkit_UnitFrames.frames) do
             if frame.isVisible and frame.NPCName then
-                local npcName = frame.NPCName:GetText()
+                local npcName = frame.NPCName
                 if npcName and npcName ~= "" then
                     table.insert(groupMembers, npcName) -- Add NPCs at the end of the turn order
                 end
@@ -597,10 +597,15 @@ local function BatchGroupMembers()
 end
 
 
-SLASH_CTS1, SLASH_CTS2, SLASH_CTS3 = "/cts", "/ctstart", "/ctnext"
+SLASH_CTS1 = "/cts"
 
 -- Function to start the turn tracker with initiative roll
 local function StartTurnTracker()
+    if not UnitIsGroupLeader("player") then
+        print("[CTSTurnTracker] Only the party leader can control the turn tracker.")
+        return
+    end
+
     turnCounter = 0
 
     -- Roll initiative for all players and NPCs
@@ -625,7 +630,11 @@ end
 
 -- Function to handle next turn and switch to the next batch
 local function NextTurn()
-    print("DEBUG -- NEXT TURN/BATCH CALLED")
+    if not UnitIsGroupLeader("player") then
+        print("[CTSTurnTracker] Only the party leader can control the turn tracker.")
+        return
+    end
+
     if isCombatInitiativePhase then
         turnCounter = 1
         currentBatch = 1
@@ -672,6 +681,11 @@ TurnTracker.NextTurn = NextTurn
 
 -- Function to end the turn tracker and reset all relevant states
 local function EndTurnTracker()
+    if not UnitIsGroupLeader("player") then
+        print("[CTSTurnTracker] Only the party leader can control the turn tracker.")
+        return
+    end
+
     -- Hide the tracker
     SetTrackerVisibility(false)
     _G.HideActionBar()
@@ -702,11 +716,6 @@ end
 
 -- Slash Command Handling
 SlashCmdList["CTS"] = function(msg)
-    if not UnitIsGroupLeader("player") then
-        print("[CTSTurnTracker] Only the party leader can control the turn tracker.")
-        return
-    end
-
     if msg == "start" then
         StartTurnTracker()  -- Start the turn tracker
     elseif msg == "next" then
@@ -715,8 +724,10 @@ SlashCmdList["CTS"] = function(msg)
         EndTurnTracker()  -- End the turn tracker
     elseif msg == "hide" then
         _G.HideActionBar()
+        UnitFrames:HideAllUnitFrames()
     elseif msg == "show" then
         _G.ShowActionBar()
+        UnitFrames:ShowAllUnitFrames()
     else
         print("Usage: /cts start | /cts next | /cts end")
     end
