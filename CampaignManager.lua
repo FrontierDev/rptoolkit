@@ -362,7 +362,7 @@ function CampaignManager:CreateSpellFrame(parentFrame)
                     CampaignManager:AddSpellWindow(newSpell)
                 end
             elseif button == "RightButton" and self.spell then
-                print(string.format("Removed spell: %s from campaign", self.spell.Name))
+                -- print(string.format("Removed spell: %s from campaign", self.spell.Name))
                 CampaignManager:RemoveSpellFromCampaign(parentFrame.SelectedCampaign, self.spell.Guid)
                 CampaignManager:PopulateCampaignSpellList(parentFrame.SelectedCampaign) -- Refresh UI
             end
@@ -374,18 +374,16 @@ function CampaignManager:CreateSpellFrame(parentFrame)
 end
 
 function CampaignManager:RemoveSpellFromCampaign(guid, spellGuid)
-    print(guid)
-
-    print("Attempting to remove spell from campaign...")
+    -- print("Attempting to remove spell from campaign...")
     local campaign = _G.Campaigns[guid]
     if not campaign then return end
 
-    print("... found campaign")
+    -- print("... found campaign")
 
 
     for index, spell in ipairs(campaign.SpellList) do
         if spell.Guid == spellGuid then
-            print("Removing " ..spell.Name)
+            -- print("Removing " ..spell.Name)
             table.remove(campaign.SpellList, index)
             CTCampaign:SaveCampaign(guid) -- Save changes
             return
@@ -904,7 +902,7 @@ function CampaignManager:AddSpellWindow(spell)
         -- Get the selected campaign
         local campaign = _G.Campaigns[CampaignManager.SelectedCampaign]
         if not campaign then
-            print("❌ Error: No selected campaign found!")
+            print("|cffff0000Error: No selected campaign found!|r")
             return
         end
 
@@ -950,7 +948,7 @@ function CampaignManager:AddSpellWindow(spell)
                 -- Overwrite existing spell data
                 campaign.SpellList[i] = spell
                 spellExists = true
-                print(string.format("✅ Spell Updated: %s", spell.Name))
+                -- print(string.format("✅ Spell Updated: %s", spell.Name))
                 break
             end
         end
@@ -958,7 +956,7 @@ function CampaignManager:AddSpellWindow(spell)
         -- If spell does not exist, add it to the list
         if not spellExists then
             table.insert(campaign.SpellList, spell)
-            print(string.format("✅ New Spell Added: %s", spell.Name))
+            -- print(string.format("✅ New Spell Added: %s", spell.Name))
         end
 
         -- Save changes and refresh UI
@@ -1092,7 +1090,6 @@ function CampaignManager:UpdateSpellTypeFields(spell)
     end
 
     local spellType = spell.Type
-    print(spellType)
     -- Generate fields based on spell type
     if spellType == "SpellDamage" then
         spell.DiceToHit = "1d20"
@@ -1249,7 +1246,7 @@ function CampaignManager:CreateAuraFrame(parentFrame)
                     CampaignManager:AddAuraWindow(newAura)
                 end
             elseif button == "RightButton" and self.aura then
-                print(string.format("Removed aura: %s from campaign", self.aura.Name))
+                -- print(string.format("Removed aura: %s from campaign", self.aura.Name))
                 CampaignManager:RemoveAuraFromCampaign(parentFrame.SelectedCampaign, self.aura.Guid)
                 CampaignManager:PopulateCampaignAuraList(parentFrame.SelectedCampaign) -- Refresh UI
             end
@@ -1261,18 +1258,10 @@ function CampaignManager:CreateAuraFrame(parentFrame)
 end
 
 function CampaignManager:RemoveAuraFromCampaign(guid, auraGuid)
-    print(guid)
-
-    print("Attempting to remove aura from campaign...")
     local campaign = _G.Campaigns[guid]
     if not campaign then return end
-
-    print("... found campaign")
-
-
     for index, aura in ipairs(campaign.AuraList) do
         if aura.Guid == auraGuid then
-            print("Removing " ..aura.Name)
             table.remove(campaign.AuraList, index)
             CTCampaign:SaveCampaign(guid) -- Save changes
             return
@@ -1635,7 +1624,6 @@ function CampaignManager:AddAuraWindow(aura)
                     if campaign.AuraList then
                         for _, aura in ipairs(campaign.AuraList) do
                             if aura.Guid == guid then
-                                print("returning " ..aura.Name)
                                 return aura.Name
                             end
                         end
@@ -1655,12 +1643,10 @@ function CampaignManager:AddAuraWindow(aura)
 
             local function OnConditionSelected(self, value, guid)
                 if not effect then
-                    print("❌ ERROR: Effect is nil, cannot save condition!")
                     return
                 end
 
                 effect.Condition = guid  -- Store GUID instead of Name
-                print("✅ Condition Saved for Effect: ", effect.Type, " | GUID:", effect.Condition)
                 UIDropDownMenu_SetText(conditionDropdown, GetAuraNameFromGUID(effect.Condition))
             end
 
@@ -1688,17 +1674,11 @@ function CampaignManager:AddAuraWindow(aura)
                     separator.notCheckable = true
                     UIDropDownMenu_AddButton(separator, level)
 
-                    -- Debug Output to Check Campaigns
-                    print("🔍 Searching for Auras in Loaded Campaigns...")
-
                     -- Store Auras by Campaign
                     local campaignAuras = {}
 
                     for campaignGUID, campaign in pairs(_G.Campaigns or {}) do
-                        print("🗂 Checking Campaign:", campaign.Name)
-
                         if campaign.AuraList and #campaign.AuraList > 0 then
-                            print("✅ Found Auras in", campaign.Name)
                             campaignAuras[campaignGUID] = { Name = campaign.Name, Auras = campaign.AuraList }
                         end
                     end
@@ -1715,7 +1695,6 @@ function CampaignManager:AddAuraWindow(aura)
 
                     -- If No Auras Found
                     if next(campaignAuras) == nil then
-                        print("⚠️ No Auras Found in Loaded Campaigns")
                         local emptyInfo = UIDropDownMenu_CreateInfo()
                         emptyInfo.text = "No Auras Found"
                         emptyInfo.disabled = true
@@ -1729,7 +1708,6 @@ function CampaignManager:AddAuraWindow(aura)
 
                     if campaign and campaign.AuraList then
                         for _, aura in ipairs(campaign.AuraList) do
-                            print("🔹 Adding Aura:", aura.Name)
                             local auraInfo = UIDropDownMenu_CreateInfo()
                             auraInfo.text = aura.Name
                             auraInfo.func = function()
@@ -1783,7 +1761,7 @@ function CampaignManager:AddAuraWindow(aura)
         -- Get the selected campaign
         local campaign = _G.Campaigns[CampaignManager.SelectedCampaign]
         if not campaign then
-            print("❌ Error: No selected campaign found!")
+            print("|cffff0000Error: No selected campaign found when saving aura!|r")
             return
         end
 
@@ -1824,7 +1802,6 @@ function CampaignManager:AddAuraWindow(aura)
                 -- Overwrite existing aura data
                 campaign.AuraList[i] = aura
                 auraExists = true
-                print(string.format("Aura Updated: %s", aura.Name))
                 break
             end
         end
@@ -1832,7 +1809,6 @@ function CampaignManager:AddAuraWindow(aura)
         -- If aura does not exist, add it to the list
         if not auraExists then
             table.insert(campaign.AuraList, aura)
-            print(string.format("New Aura Added: %s", aura.Name))
         end
 
         -- Save changes and refresh UI
@@ -2001,8 +1977,6 @@ function CampaignManager:SendCampaign(guid)
         print("|cffff0000Error: No campaign selected!|r")
         return
     end
-
-    print(guid)
 
     local chunks, totalChunks = CampaignManager:SerializeCampaign(guid)
     if not chunks then return end
@@ -2208,7 +2182,7 @@ end
 function CampaignManager:SerializeCampaign(guid)
     local campaign = _G.Campaigns[guid] -- Retrieve from database
     if not campaign then
-        print("|cffff0000Error: Campaign not found!|r")
+        print("|cffff0000Error: Campaign not found when serializing campaign!|r")
         return
     end
 
@@ -2242,8 +2216,6 @@ function CampaignManager:SerializeCampaign(guid)
 end
 
 local function DeserializeEffects(data)
-    print("Deserializing effects...")
-
     local effects = {}
 
     -- Ensure input is valid
@@ -2260,8 +2232,6 @@ local function DeserializeEffects(data)
     for effectData in data:gmatch("{(.-)}") do  -- Extract everything inside `{}` blocks
         local effect = {}
 
-        print("Processing Effect: " .. effectData) -- Debugging output
-
         -- **Extract key-value pairs inside Effect using `~` delimiter**
         for epair in effectData:gmatch("([^~]+)") do
             local ek, ev = strsplit("=", epair, 2)
@@ -2269,8 +2239,6 @@ local function DeserializeEffects(data)
                 -- **Remove leading/trailing quotes and unescape characters**
                 ev = ev:gsub("^'(.-)'$", "%1"):gsub("\\'", "'")
                 effect[ek] = tonumber(ev) or ev -- Convert numbers properly
-
-                print("Parsed Effect Key-Value: " .. ek .. " = " .. tostring(ev)) -- Debug output
             end
         end
 
@@ -2282,8 +2250,6 @@ end
 
 
 local function DeserializeAuras(data)
-    print("Deserializing aura data...")
-
     local auras = {}
 
     -- Ensure input is valid
@@ -2308,8 +2274,6 @@ local function DeserializeAuras(data)
                 -- **Ensure `{` is removed from first key**
                 k = k:gsub("^{", ""):match("^%s*(.-)%s*$") -- Trim spaces
                 v = v:match("^%s*(.-)%s*$") -- Trim spaces
-
-                print("Extracted Key: " .. k .. " | Value: " .. v) -- Debugging output
 
                 if k == "RemainingTurns" then
                     aura[k] = tonumber(v) -- Convert numeric values
@@ -2361,8 +2325,6 @@ end
 
 
 local function DeserializeSpells(data)
-    print("Deserializing spell data...")
-
     local spells = {}
 
     -- Ensure input is valid
@@ -2388,16 +2350,12 @@ local function DeserializeSpells(data)
                 k = k:gsub("^{", ""):match("^%s*(.-)%s*$") -- Trim spaces
                 v = v:match("^%s*(.-)%s*$") -- Trim spaces
 
-                print("Extracted Key: " .. k .. " | Value: " .. v) -- Debugging output
-
                 -- **Convert numeric values where applicable**
                 if k == "ManaCost" then
                     spell[k] = tonumber(v)
                 -- **Deserialize lists using `$` delimiter**
                 elseif k == "HitModifiers" or k == "CritModifiers" or k == "DamageModifiers" or k == "Auras" or k == "Requires" then
-                    print("List " ..k.. " | v: " ..v)
                     spell[k] = DeserializeSpellList(v)
-                    print(spell[k])
                 else
                     spell[k] = v:gsub("\\'", "'") -- Unescape single quotes
                 end
@@ -2412,8 +2370,6 @@ end
 
 
 function CampaignManager:DeserializeCampaign(data)
-    print("Deserializing campaign data...")
-
     local campaign = {}
 
     -- Ensure input is valid
@@ -2431,8 +2387,6 @@ function CampaignManager:DeserializeCampaign(data)
         if k and v then
             k = k:match("^%s*(.-)%s*$") -- Trim spaces
             v = v:match("^%s*(.-)%s*$") -- Trim spaces
-
-            print("Extracted Key: " .. k .. " | Value: " .. v) -- Debugging output
 
             if k == "LastUpdated" then
                 campaign[k] = tonumber(v) -- Convert numeric values
@@ -2460,13 +2414,10 @@ end
 local receiveFrame = CreateFrame("Frame")
 receiveFrame:RegisterEvent("CHAT_MSG_ADDON")
 receiveFrame:SetScript("OnEvent", function(_, _, prefix, message, channel, sender)
-    -- print("|cff00ff00[Debug] Received Addon Message - Prefix: " .. prefix .. " | Message: " .. message .. " | From: " .. sender .. "|r")
-    
     if prefix == "CTCINIT" and UnitName("player") ~= sender then
         -- print("|cff00ff00[Debug] Received Addon Message - Prefix: " .. prefix .. " | Message: " .. message .. " | From: " .. sender .. "|r")
         HandleCampaignInit(prefix, message, channel, sender)
     elseif prefix == "CTCNEXT" and UnitName("player") ~= sender then
-        print("|cff00ff00[Debug] Received Addon Message - Prefix: " .. prefix .. " | Message: " .. message .. " | From: " .. sender .. "|r")
         HandleCampaignChunk(prefix, message, channel, sender)
     end
 end)

@@ -286,11 +286,11 @@ end
 
 function Equipment:AddDefaultItems()
     if _G.items and #_G.items > 0 then
-        print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t Skipping default item creation: Items already exist.")
+        -- print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t Skipping default item creation: Items already exist.")
         return
     end
 
-    print("✅ Adding default items to Equipment UI...")  
+    -- print("✅ Adding default items to Equipment UI...")  
 
     -- **Weapons**
     self:AddItem({
@@ -397,7 +397,7 @@ function Equipment:AddDefaultItems()
         flavorText = "A sacred text carried by the devoted."
     })
 
-    print("✅ Default items successfully added.")
+    -- print("✅ Default items successfully added.")
 end
 
 -- ✅ Function to Create the Equipment UI
@@ -538,11 +538,11 @@ end
 function Equipment:LoadEquippedItems()
     -- Check if the equipped GUIDs were saved in the profile
     if not _G.equippedItemGUIDs or #_G.equippedItemGUIDs == 0 then
-        print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t No equipped items to load.")
+        -- print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t No equipped items to load.")
         return
     end
 
-    print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t Equipping items saved on profile... ")
+    -- print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t Equipping items saved on profile... ")
 
     -- Loop through the equipped GUIDs and apply the glow border to the slots
     for _, guid in ipairs(_G.equippedItemGUIDs) do
@@ -627,8 +627,7 @@ local resistanceFrames = _G.resistanceFrames or {} -- Resistance UI references
 function Equipment:ApplyItemEffects(item, apply)
     local modifier = apply and 1 or -1  -- Apply (+1) or Remove (-1)
 
-    print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t Applying item effects...")
-
+    --print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t Applying item effects...")
 
     -- Apply changes to ability scores (stored only in _G.abilityTexts)
     for key, value in pairs(item.effects or {}) do
@@ -723,7 +722,7 @@ function Equipment:ApplyItemEffects(item, apply)
     -- ✅ Save the updated values
     SaveCharacterProfile()
 
-    print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t FINISHED Applying item effects...")
+    -- print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t FINISHED Applying item effects...")
 end
 
 

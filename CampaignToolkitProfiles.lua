@@ -73,10 +73,10 @@ function SaveCharacterProfile()
     profile.Items = {}
 
     -- ✅ **Ensure items are saved correctly**
-    print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t 🔄 Saving items to profile...")
+    -- print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t 🔄 Saving items to profile...")
 
     if not _G.items or #_G.items == 0 then
-        print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t No items found in _G.items!")
+        -- print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t No items found in _G.items!")
     else
         for _, item in ipairs(_G.items) do
             -- print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t Saving item: " .. item.name .. " | GUID: " .. item.guid)
@@ -105,7 +105,7 @@ function SaveCharacterProfile()
     end
 
     _G.CampaignToolkitProfilesDB[key] = profile  -- Ensure it's saved persistently
-    print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t ✅ Campaign Toolkit: Profile saved for " .. key)
+    -- print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t ✅ Campaign Toolkit: Profile saved for " .. key)
 end
 
 
@@ -199,7 +199,7 @@ function LoadCharacterProfile()
     end
 
     if not profile.Items or itemCount == 0 then
-        print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t No items found in saved profile!")
+        --print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t No items found in saved profile!")
     else
         for guid, savedItem in pairs(profile.Items) do
             table.insert(_G.items, {
@@ -267,7 +267,7 @@ function LoadCharacterProfile()
     if Equipment and Equipment.UpdateInventoryUI then
         Equipment:UpdateInventoryUI()
     else
-        print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t ❌ ERROR: Equipment UI update function missing!")
+       -- print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t ERROR: Equipment UI update function missing!")
     end
         
     -- Select which items are already equipped.
@@ -275,11 +275,11 @@ function LoadCharacterProfile()
 
     -- ✅ If no items were loaded, add default items
     if not _G.items or #_G.items == 0 then
-        print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t ❌ No items found in profile! Adding default items...")
+        -- print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t ❌ No items found in profile! Adding default items...")
         if Equipment and Equipment.AddDefaultItems then
             Equipment:AddDefaultItems()
         else
-            print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t ❌ ERROR: Equipment:AddDefaultItems() function missing!")
+            -- print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t ❌ ERROR: Equipment:AddDefaultItems() function missing!")
         end
     end
 
@@ -294,7 +294,7 @@ eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD") -- ✅ Ensures data is availab
 eventFrame:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_LOGOUT" or event == "PLAYER_LEAVING_WORLD" then
         SaveCharacterProfile()
-        print("💾 Profile saved before logout/reload.")
+        -- print("💾 Profile saved before logout/reload.")
     end
 end)
 

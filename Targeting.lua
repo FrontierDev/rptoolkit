@@ -10,10 +10,10 @@ Targeting.pcTarget = pcTarget
 function Targeting:ChangeNpcTarget(unitID)
     if unitID ~= "NONE" then
         Targeting.npcTarget = unitID
-        print("NPC target is now: " .. Targeting.npcTarget)  -- Use Targeting.npcTarget here
+        -- print("NPC target is now: " .. Targeting.npcTarget)  -- Use Targeting.npcTarget here
     else
         Targeting.npcTarget = "NONE"
-        print("Reset NPC target.")
+        -- print("Reset NPC target.")
     end
 
     _G.RefreshActionBar()  -- Call to refresh the action bar (assuming this function is defined elsewhere)
@@ -26,7 +26,7 @@ function Targeting:ChangePcTarget()
     -- Check if the target exists
     if not UnitExists(targetUnit) then
         Targeting.pcTarget = "NONE"
-        print("Reset PC target.")
+        -- print("Reset PC target.")
         return
     end
 
@@ -59,8 +59,6 @@ function GetTargetNPCDisplayID(target)
 end
 
 function Targeting:UnitIsPlayer(name)
-    print("Checking unit: " ..name)
-
     if not IsInGroup() then return false end  -- Not in a group, return false
 
     -- Check player's own name
@@ -91,13 +89,13 @@ end
 
 function Targeting:ApplyDamage(target, damage, school)
     if not damage or damage <= 0 then
-        print("Invalid damage value.")
+        -- print("Invalid damage value.")
         return
     end
 
     local targetUnit = Targeting.npcTarget
     if targetUnit == "NONE" then
-        print("No NPC target selected.")
+        -- print("No NPC target selected.")
         return
     end
 
@@ -114,10 +112,7 @@ function Targeting:ApplyAura(target, auraGuid)
         return
     end
 
-    print("TARGET: " ..target)
-
     if Targeting:UnitIsPlayer(target) then
-        print("APPLYING " .. auraGuid .. " TO FRIENDLY TARGET: " ..target)
         PlayerTurn:SendAddAuraMessage(target, auraGuid)
     else
         UnitFrames:Broadcast_ApplyAura(target, auraGuid)

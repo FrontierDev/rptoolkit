@@ -833,10 +833,10 @@ local function Handle_DamagePlayer(data)
         _G.hiddenStats["Health"] = _G.hiddenStats["Health"] - finalDamage
         
         -- Print the damage dealt
-        print(unitFrame .. " dealt " .. finalDamage .. " (" ..damage.. " -" ..mitigation.. ") " .. school .. " damage to " .. player)
+        -- print(unitFrame .. " dealt " .. finalDamage .. " (" ..damage.. " -" ..mitigation.. ") " .. school .. " damage to " .. player)
 
         -- Print the current health and mitigation used
-        print("Health: " ..currentHealth.. " -> " .. _G.hiddenStats["Health"])
+        -- print("Health: " ..currentHealth.. " -> " .. _G.hiddenStats["Health"])
 
         -- Update health and mana (assuming _G.UpdateHealthAndMana() handles UI updates)
         _G.UpdateHealthAndMana()
@@ -1062,7 +1062,6 @@ function UnitFrames:BroadcastUnitFrameSync()
                 frameID, visibilityState, npcName, npcID, currentHealth, maxHealth, modelX, modelY, modelZ)
 
             local channel = IsInRaid() and "RAID" or "PARTY"
-            print("... " ..message)
             C_ChatInfo.SendAddonMessage(ADDON_PREFIX, message, channel)
         end
     end
@@ -1087,7 +1086,6 @@ function UnitFrames:Sync_UnitFrame(frame)
             frameID, visibilityState, npcName, npcID, currentHealth, maxHealth, modelX, modelY, modelZ)
 
         local channel = IsInRaid() and "RAID" or "PARTY"
-        print("... " ..message)
         C_ChatInfo.SendAddonMessage(ADDON_PREFIX, message, channel)
     end
 end

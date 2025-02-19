@@ -27,8 +27,6 @@ function CTCampaign:SaveCampaign()
         AuraList = self.AuraList or {},
         Description = self.Description
     }
-
-    print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t Campaign '" .. self.Guid .. "' saved successfully.")
 end
 
 -- Function to count the number of campaigns in _G.Campaigns
@@ -53,7 +51,7 @@ function CTCampaign:LoadCampaign(campaignGuid)
     -- Add the loaded campaign to _G.Campaigns
     _G.Campaigns[campaignGuid] = self
 
-    print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t Loaded campaign: " .. self.Name .. " | Number of campaigns: " .. CountCampaigns())  -- Corrected to use CountCampaigns
+    -- print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t Loaded campaign: " .. self.Name .. " | Number of campaigns: " .. CountCampaigns())  -- Corrected to use CountCampaigns
 
     -- Load spells from this campaign.
     Spellbook:LoadSpellsFromCampaign(campaignGuid)
@@ -92,7 +90,6 @@ eventFrame:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_LOGOUT" or event == "PLAYER_LEAVING_WORLD" then
         if CTCampaign.Guid ~= "NONE" then
             CTCampaign:SaveCampaign()
-            print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t 💾 Campaign '" .. CTCampaign.Guid .. "' saved before logout/reload.")
         end
     end
 

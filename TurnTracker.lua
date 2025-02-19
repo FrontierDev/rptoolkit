@@ -1,6 +1,5 @@
 ﻿local ADDON_PREFIX = "CTSTurnTracker"
 C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)
-print("[CTSTurnTracker] Addon prefix registered.")
 
 local TurnTracker = {}
 _G.TurnTracker = TurnTracker
@@ -305,7 +304,7 @@ local function DisplayPortraitsForActiveBatch()
     local activeBatch = batches[currentBatch] or activeBatch
 
     if not activeBatch then
-        print("Error: activeBatch is nil for currentBatch " .. currentBatch)
+        -- print("Error: activeBatch is nil for currentBatch " .. currentBatch)
         return
     end
 
@@ -355,25 +354,25 @@ function LockPortrait(playerName)
     local anyActive = false
     for _, portrait in pairs(activePortraits) do
         -- Check if the portrait corresponds to the sender (player whose turn ended)
-        print("Checking " .. portrait.playerName.. " vs. " ..playerName)
+        -- print("Checking " .. portrait.playerName.. " vs. " ..playerName)
 
         if portrait.playerName == playerName then
-            print("Attempting to lock portrait for " .. playerName)
+            -- print("Attempting to lock portrait for " .. playerName)
 
             -- Check if portrait.model and portrait.portrait exist before modifying them
             if portrait.model then
-                print("Locking 3D model for " .. playerName)
+                -- print("Locking 3D model for " .. playerName)
                 portrait.model:SetAlpha(0.5)  -- Reduce opacity to 50% to grey it out
             else
-                print("No model found for " .. playerName)
+                -- print("No model found for " .. playerName)
             end
 
             if portrait.portrait then
-                print("Locking 2D portrait for " .. playerName)
+                -- print("Locking 2D portrait for " .. playerName)
                 portrait.portrait:SetAlpha(0.5)  -- Grey out the portrait texture
                 portrait.portrait:SetVertexColor(0.5, 0.5, 0.5)  -- Apply a grey color
             else
-                print("No 2D portrait found for " .. playerName)
+                -- print("No 2D portrait found for " .. playerName)
             end
 
             portrait.Locked = true
@@ -398,9 +397,7 @@ local function ClearPortraits()
         portraitFrame:SetParent(nil)  -- Remove the portrait from its parent
     end
     -- Clear the active portraits table to free up memory
-    print("Portraits before: " ..#activePortraits)
     activePortraits = {}
-    print("Portraits after: " ..#activePortraits)
 end
 
 
@@ -420,7 +417,7 @@ local function SendTurnUpdate()
         
         -- Ensure batches[currentBatch] exists
         if not batches[currentBatch] then
-            print("[CTSTurnTracker] Error: Active batch is nil!")
+            -- print("[CTSTurnTracker] Error: Active batch is nil!")
             return
         end
         
@@ -432,7 +429,6 @@ local function SendTurnUpdate()
         local channel = GetGroupChannel()
         
         -- Send to the group (RAID, PARTY, etc.)
-        print("SENDING TURN MESSAGE.")
         C_ChatInfo.SendAddonMessage(ADDON_PREFIX, string.format("NEXT:%s", message), channel)
     end
 end
@@ -451,22 +447,21 @@ local function HandleAddonMessage(prefix, message, _, sender)
         SendTurnUpdate()
     elseif message == "REQUEST_SYNC" and not UnitIsGroupLeader("player") then return
     else
-        print(message)
         if UnitIsGroupLeader("player") then return end
 
         -- Parse the message (newTurn, playerNames, visibilityState)
         local command, newTurn, playerNamesReceived, visibilityState = strsplit(":", message)
 
         if command == "NEXT" then
-            print("RECEIVED NEXT TURN MESSAGE")
+            -- print("RECEIVED NEXT TURN MESSAGE")
         else
-            print("RECEIVED UNKNOWN MESSAGE")
+            -- print("RECEIVED UNKNOWN MESSAGE")
             return
         end
 
         -- Debug print to check the received player names
         if playerNamesReceived then
-            print("[CTSTurnTracker] Received player names for batch: " .. playerNamesReceived)
+            -- print("[CTSTurnTracker] Received player names for batch: " .. playerNamesReceived)
         end
 
         -- Update the turn and visibility
@@ -486,7 +481,7 @@ local function HandleAddonMessage(prefix, message, _, sender)
         end
 
         -- Debug: Print the active batch for debugging
-        print("[CTSTurnTracker] Active Batch: " .. table.concat(activeBatch, ", "))
+        -- print("[CTSTurnTracker] Active Batch: " .. table.concat(activeBatch, ", "))
 
         -- Ensure UpdateTurnTracker is called on all clients
         UpdateTurnTracker()
@@ -518,10 +513,10 @@ local function MonitorAllRolls(rollGuid, ticker)
 
     -- If all rolls have been received, print a debug message and cancel the ticker
     if allResultsReceived then
-        print("[CTSTurnTracker] All initiative rolls have been received.")
+        print("[RPT] All initiative rolls have been received.")
         resultTicker:Cancel()  -- Stop the ticker once all rolls are in
     else
-        print("[CTSTurnTracker] Waiting for all initiative rolls...")
+        print("[RPT] Waiting for all initiative rolls...")
     end
 
     return allResultsReceived
@@ -602,7 +597,7 @@ SLASH_CTS1 = "/cts"
 -- Function to start the turn tracker with initiative roll
 local function StartTurnTracker()
     if not UnitIsGroupLeader("player") then
-        print("[CTSTurnTracker] Only the party leader can control the turn tracker.")
+        print("[RPT] Only the party leader can control the turn tracker.")
         return
     end
 
@@ -631,7 +626,7 @@ end
 -- Function to handle next turn and switch to the next batch
 local function NextTurn()
     if not UnitIsGroupLeader("player") then
-        print("[CTSTurnTracker] Only the party leader can control the turn tracker.")
+        print("[RPT] Only the party leader can control the turn tracker.")
         return
     end
 
@@ -662,7 +657,7 @@ local function NextTurn()
     activeBatch = batches[currentBatch]
 
     if not activeBatch then
-        print("Error: activeBatch is nil for currentBatch " .. currentBatch)
+        -- print("Error: activeBatch is nil for currentBatch " .. currentBatch)
         return
     end
 
@@ -682,7 +677,7 @@ TurnTracker.NextTurn = NextTurn
 -- Function to end the turn tracker and reset all relevant states
 local function EndTurnTracker()
     if not UnitIsGroupLeader("player") then
-        print("[CTSTurnTracker] Only the party leader can control the turn tracker.")
+        print("[RPT] Only the party leader can control the turn tracker.")
         return
     end
 

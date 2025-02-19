@@ -15,15 +15,12 @@ function Spellbook:LoadSpellsFromCampaign(guid)
     -- Get the campaign using the provided GUID
     local campaign = _G.CampaignToolkitCampaignsDB[guid]
     if not campaign then
-        print("❌ Error: Could not find campaign data for GUID: " .. tostring(guid))
+        print("|cffff0000Error: Could not find campaign data for GUID: " .. tostring(guid).. "|r")
         return
     end
 
-    print("📌 Loading Spells from Campaign: " .. campaign.Name)
-
     -- Ensure the campaign has a spell list
     if not campaign.SpellList then
-        print("⚠️ No SpellList found for " .. campaign.Name)
         return
     end
 
@@ -44,7 +41,6 @@ function Spellbook:LoadSpellsFromCampaign(guid)
         -- Add spell if it doesn't already exist
         if not spellExists then
             table.insert(_G.Spellbook, spell)
-            print(string.format("✅ Loaded Spell: %s from Campaign: %s", spell.Name, campaign.Name))
 
             -- Assign the spell to the next available spell slot
             if _G.spellbookSlots[slotIndex] then
@@ -90,9 +86,6 @@ function Spellbook:Add(data)
 
     -- Store the spell in the spellbook table
     table.insert(_G.Spellbook, newSpell)
-
-    -- Debugging Output
-    -- print(string.format("Created spell: %s with GUID: %s", newSpell.Name, newSpell.Guid))
 
     if newSpell.BuiltIn then
         CTSpell:EquipSpell(newSpell.Guid, newSpell.DefaultSlot)
@@ -166,7 +159,7 @@ function Spellbook:Create(parentFrame)
                     -- print(string.format("✅ Equipped spell: %s in action bar slot %d", self.spell.Name, firstAvailableSlot))
                     _G.RefreshActionBar()
                 else
-                    print("❌ No available action bar slots!")
+                    print("|cffff0000No available action bar slots!|r")
                 end
             end
         end)

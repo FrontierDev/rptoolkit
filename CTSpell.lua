@@ -66,7 +66,7 @@ function CTSpell:CheckRequirements(spell)
                     return passed 
                 end
             else
-                print("Unknown requirement: " .. requirement)
+                print("|cffff0000Unknown requirement: " .. requirement.. "|r")
             end
         end
     end
@@ -158,7 +158,7 @@ function CTSpell:Use(guid)
                     end
                 end
             else
-                print("Unknown spell type: " .. spellToUse.Type)
+                print("|cffff0000Unknown spell type: " .. spellToUse.Type.. "|r")
             end
         end
 
@@ -173,7 +173,7 @@ function CTSpell:Use(guid)
         _G.RefreshActionBar()
 
     else
-        print("Spell not found!")
+        print("|cffff0000Error: Spell not found!|r")
     end
 end
 
@@ -215,7 +215,7 @@ end
 function CTSpell:UseSpellDamageSpell(spellToUse)
     local target = GetSpellTarget(spellToUse)
     if target == "UNKNOWN" then
-        print("Spell has an unknown target!")
+        print("|cffff0000Error: Spell has an unknown target!|r")
         return
     end
     
@@ -247,7 +247,6 @@ function CTSpell:UseSpellDamageSpell(spellToUse)
     -- Apply any auras that are set to apply on hit.
     if spellToUse.Auras then
         for _, aura in pairs(spellToUse.Auras) do
-            print("Applying aura: " ..aura)
             CTSpell:ApplySpellAura(UnitName("player"), GetSpellTarget(spellToUse), aura, "HitTarget")
         end
     end
@@ -264,11 +263,9 @@ end
 
 function CTSpell:ApplySpellAura(caster, target, auraGUID, trigger)
     if target == "UNKNOWN" then
-        print("Spell has an unknown target!")
+        print("|cffff0000Spell has an unknown target!|r")
         return
     end
-
-    print("Attempting to cast " ..auraGUID.. " on trigger " .. trigger)
 
     -- Find the aura from any loaded campaign
     local foundAura = nil
@@ -276,7 +273,6 @@ function CTSpell:ApplySpellAura(caster, target, auraGUID, trigger)
         if campaign.AuraList then
             for _, aura in ipairs(campaign.AuraList) do
                 if aura.Guid == auraGUID and aura.TriggerOn == trigger then
-                    print("Applying aura: " .. aura.Name .. " to target: " ..target)
                     CTAura:ApplyAura(target, caster, aura)
                     break               
                 end
@@ -289,7 +285,6 @@ end
 function CTSpell:EquipSpell(guid, slot)
     -- Ensure Spellbook is a table
     if type(_G.Spellbook) ~= "table" then
-        print("❌ Error: _G.Spellbook is not a table!")
         return
     end
 
@@ -307,7 +302,7 @@ function CTSpell:EquipSpell(guid, slot)
 
     -- Error handling if spell is not found
     if not spellToEquip then
-        print("❌ Error: Spell with GUID " .. guid .. " not found!")
+        print("|cffff0000Error: Spell with GUID " .. guid .. " not found!|r")
         return
     end
 
@@ -317,7 +312,7 @@ function CTSpell:EquipSpell(guid, slot)
     -- Equip the spell in the specified slot
     _G.equippedSpells[slot] = spellToEquip
 
-    print(string.format("Equipped spell: %s (%s) in action bar slot %d", spellToEquip.Name, spellToEquip.Guid, slot))
+    -- print(string.format("Equipped spell: %s (%s) in action bar slot %d", spellToEquip.Name, spellToEquip.Guid, slot))
 end
 
 
@@ -393,7 +388,8 @@ end
 local builtin_mh_attack = {
     guid = "BUILTIN_MH_ATTACK",  -- Unique GUID for the spell
     name = "Main Hand Attack",  -- Spell name
-    type = "WeaponDamage",
+    type = "SpellDamage",
+    school = "Physical",
     actionCost = "Action",
     icon = "Interface\\Icons\\inv_sword_27",  -- Icon path
     description = "Attack with your main hand weapon.",  -- Spell description
@@ -401,8 +397,8 @@ local builtin_mh_attack = {
     defaultSlot = 1,
     diceToHit = "1d20",  -- Dice for the spell (e.g., damage roll)
     hitModifiers = { "meleeHit" },  -- Modifier (e.g., type of spell or damage modifier)
-    diceToDamage = "MAIN_HAND",
-    critModifier = "meleeCrit",
+    diceToDamage = "mh",
+    critModifier = { "meleeCrit" },
     damageModifiers = { "meleeBonus" }, -- The modifier to be applied to deal damage (e.g. melee bonus, ranged bonus, fire bonus...)
     scriptId = nil,
     requires = { "MAIN_HAND", "TARGET_ENEMY" }
@@ -411,15 +407,16 @@ local builtin_mh_attack = {
 local builtin_oh_attack = {
     guid = "BUILTIN_OH_ATTACK",  -- Unique GUID for the spell
     name = "Off Hand Attack",  -- Spell name
-    type = "WeaponDamage",
+    type = "SpellDamage",
     actionCost = "Bonus Action",
+    school = "Physical",
     icon = "Interface\\Icons\\trade_archaeology_silverdagger",  -- Icon path
     description = "Attack with your off hand weapon.",  -- Spell description
     builtIn = true,  -- Is this a built-in spell?
     defaultSlot = 6,
     diceToHit = "1d20",  -- Dice for the spell (e.g., damage roll)
     hitModifiers = {"meleeHit"},  -- Modifier (e.g., type of spell or damage modifier)
-    diceToDamage = "OFF_HAND",
+    diceToDamage = "oh",
     damageModifiers = {"meleeBonus"}, -- The modifier to be applied to deal damage (e.g. melee bonus, ranged bonus, fire bonus...)
     critModifier = "meleeCrit",
     scriptId = nil,

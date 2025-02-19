@@ -1,6 +1,7 @@
 ﻿-- CharacterSheet.lua
 local ADDON_PREFIX = "CTDICE"
 C_ChatInfo.RegisterAddonMessagePrefix(ADDON_PREFIX)
+
 -- ✅ Ensure Global Tables Exist Before UI Loads
 _G.CharacterSheet = CharacterSheet
 
@@ -90,7 +91,7 @@ for _, stat in ipairs(combatStats) do
 end
 
 
-print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t CharacterSheet.lua: Global tables initialized")
+-- print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t CharacterSheet.lua: Global tables initialized")
 
 -- ✅ Define Ability Scores (STR, DEX, etc.) & Ensure UI Elements Exist
 local abilities = {"STR", "DEX", "CON", "INT", "WIS", "CHA"}
@@ -120,7 +121,7 @@ _G.maxProficiencies = 4
 _G.availableProficiencies = _G.maxProficiencies - (table.getn(_G.playerProficiencies) or 0)
 
 -- ✅ Debugging Output
-print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t Loaded Available Proficiencies:", _G.availableProficiencies)
+-- print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t Loaded Available Proficiencies:", _G.availableProficiencies)
 
 
 -- ✅ Assign Global Update Functions (Used in Equipment.lua & Other Scripts)
@@ -130,7 +131,7 @@ _G.UpdateAbilityScores = UpdateAbilityScores
 _G.UpdateCombatStats = UpdateCombatStats
 _G.UpdateResistances = UpdateResistances
 
-print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t CharacterSheet.lua: Initialization complete.")
+-- print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t CharacterSheet.lua: Initialization complete.")
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -251,7 +252,7 @@ local function SwitchTab(tabIndex)
     -- ✅ Show Equipment UI if Equipment Tab is clicked
     if tabIndex == 2 and CharacterSheet.EquipmentTab then
         CharacterSheet.EquipmentTab.frame:Show()
-        print("✅ Equipment Tab is now visible!") -- Debug message
+        --print("✅ Equipment Tab is now visible!") -- Debug message
     else
         if CharacterSheet.EquipmentTab then
             CharacterSheet.EquipmentTab.frame:Hide()
@@ -261,7 +262,7 @@ local function SwitchTab(tabIndex)
     -- ✅ Show Equipment UI if Equipment Tab is clicked
     if tabIndex == 3 and CharacterSheet.SpellbookTab then
         CharacterSheet.SpellbookTab.frame:Show()
-        print("✅ Spellbook Tab is now visible!") -- Debug message
+        --print("✅ Spellbook Tab is now visible!") -- Debug message
     else
         if CharacterSheet.SpellbookTab then
             CharacterSheet.SpellbookTab.frame:Hide()
@@ -328,7 +329,7 @@ randomizeButton:SetScript("OnClick", function()
         local newScore = RollAbilityScore()
         _G.abilityTexts[ability].score:SetText(newScore)
         _G.abilityTexts[ability].mod:SetText(math.floor((newScore - 10) / 2))
-        print("→", ability, "rolled:", newScore)
+        -- print("→", ability, "rolled:", newScore)
     end
 
     -- ✅ Save the new ability scores
@@ -342,7 +343,7 @@ randomizeButton:SetScript("OnClick", function()
     UpdateProficiencyIndicators()
     UpdateHiddenStats()
 
-    print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t All statistics updated!")
+    -- print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t All statistics updated!")
 end)
 
 -- ✅ Create the Reset Button with a Reset Icon 🔄
@@ -357,7 +358,7 @@ resetIcon:SetTexture("Interface\\Icons\\spell_nature_nullifydisease")  -- 🔄 R
 
 -- Function to reset the profile
 local function ResetProfile()
-    print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t ⚠ Resetting character sheet and inventory!")
+    print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t Resetting character sheet and inventory!")
 
     -- ✅ Reset Ability Scores
     for ability, texts in pairs(_G.abilityTexts) do
@@ -588,7 +589,7 @@ for i, skill in ipairs(skills) do
 
     -- ✅ Proficiency Toggle on Click (Indicator Only)
     profIndicator:SetScript("OnMouseDown", function()
-        print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t DEBUG: Clicked on skill:", skill)
+        -- print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t DEBUG: Clicked on skill:", skill)
 
         if not _G.playerProficiencies then _G.playerProficiencies = {} end -- Ensure it exists
 
@@ -599,11 +600,11 @@ for i, skill in ipairs(skills) do
 
         -- ✅ Toggle Proficiency
         if _G.playerProficiencies[skill] then
-            print("Removing proficiency for:", skill)
+            -- print("Removing proficiency for:", skill)
             _G.playerProficiencies[skill] = nil
             _G.CampaignToolkitProfilesDB[charKey]["Proficiencies"][skill] = nil
         elseif _G.availableProficiencies > 0 then
-            print("Adding proficiency for:", skill)
+            -- print("Adding proficiency for:", skill)
             _G.playerProficiencies[skill] = true
             _G.CampaignToolkitProfilesDB[charKey]["Proficiencies"][skill] = true
         end
@@ -616,7 +617,7 @@ for i, skill in ipairs(skills) do
         _G.availableProficiencies = _G.maxProficiencies - count
 
         -- ✅ Print Debugging Output
-        print("Updated Available Proficiencies:", _G.availableProficiencies)
+        -- print("Updated Available Proficiencies:", _G.availableProficiencies)
 
         -- ✅ Update UI and Save Data
         UpdateSkillModifiers()
@@ -627,10 +628,8 @@ for i, skill in ipairs(skills) do
     -- ✅ Left-click on Skill Name to Roll 1d20 + Modifier
     skillText:SetScript("OnMouseDown", function(_, button)
         if button == "LeftButton" then
-            print("Skill clicked: " .. skill) -- Debugging message
-        
             if not Dice or not Dice.Roll then
-                print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t ERROR: Dice.Roll() is missing! Make sure Dice.lua is loaded first.")
+                print("|cffff0000Error: Dice.Roll() is missing! Make sure Dice.lua is loaded first.|r")
                 return
             end
 
@@ -667,15 +666,6 @@ for i = 1, maxProficiencies do
     circle:SetTexture("Interface\\COMMON\\Indicator-Green") -- Green Circle
     profCircles[i] = circle
 end
-
-local lastMeleeHit = _G.combatStats.Melee.hit or 0
-
-C_Timer.NewTicker(1, function()
-    if _G.combatStats.Melee.hit ~= lastMeleeHit then
-        print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t 🚨 ALERT: Melee Hit CHANGED from", lastMeleeHit, "to", _G.combatStats.Melee.hit)
-        lastMeleeHit = _G.combatStats.Melee.hit
-    end
-end)
 
 ---- COMBAT STATS
 -- Create a frame for Combat Stats
