@@ -461,17 +461,7 @@ end
 
 -- ✅ Function to Use Weapon (Roll Damage)
 function Equipment:UseWeapon(slot)
-    local item = slot.item
-    if not item then return end
-
-    local weaponName = item.name or "Unknown Weapon"
-    local damageDice = item.damageDice or "1d6"
-    local damageRoll = Dice.Roll(damageDice)
-
-    print("You attack with " .. weaponName .. " and roll " .. damageRoll .. " damage!")
-
-    -- Send roll to chat using Dice utility
-    Dice.SendRollMessage(UnitName("player"), "Weapon Attack", damageDice, 0, damageRoll)
+    -- Null
 end
 
 function Equipment:EquipItem(item, slotIndex)
@@ -479,7 +469,7 @@ function Equipment:EquipItem(item, slotIndex)
     if self.equippedItems[item.category] and self.equippedItems[item.category].guid == item.guid then
         -- Unequip the item
         self:UnequipItem(item, slotIndex)
-        print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t ✅ Unequipped: " .. item.name .. " from slot " .. slotIndex)
+        -- print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t ✅ Unequipped: " .. item.name .. " from slot " .. slotIndex)
         return
     end
 
@@ -495,7 +485,7 @@ function Equipment:EquipItem(item, slotIndex)
 
     -- Add GUID to the equipped list
     table.insert(_G.equippedItemGUIDs, item.guid)
-    print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t Equipped:", item.name, "in", item.category, "GUID:", item.guid)
+    -- print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t Equipped:", item.name, "in", item.category, "GUID:", item.guid)
 
     -- Apply Item Effects
     Equipment:ApplyItemEffects(item, true)
@@ -503,8 +493,8 @@ function Equipment:EquipItem(item, slotIndex)
     -- Add the visual indicator to show the item is equipped
     local slot = _G.slots[slotIndex]
     if slot and slot.icon then
-        print("Slot Index: " .. slotIndex)  -- Debug: Print the slot index
-        print("Slot Exists: " .. tostring(slot))  -- Debug: Verify if the slot is correctly retrieved
+        -- print("Slot Index: " .. slotIndex)  -- Debug: Print the slot index
+        -- print("Slot Exists: " .. tostring(slot))  -- Debug: Verify if the slot is correctly retrieved
 
         -- Ensure no desaturation (we're keeping the item fully colored)
         slot.icon:SetDesaturated(false)
@@ -554,6 +544,8 @@ function Equipment:LoadEquippedItems()
             if item.guid == guid then
                 itemFound = true
                 -- print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t Found item with GUID: " .. guid)  -- Debugging item found
+
+                self.equippedItems[item.category] = item
 
                 -- Loop through the slots and find the matching item GUID
                 for slotIndex, slot in ipairs(_G.slots) do

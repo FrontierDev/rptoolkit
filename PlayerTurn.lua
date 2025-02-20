@@ -5,8 +5,13 @@ print("[CTSPlayerTurn] Addon prefix registered.")
 local PlayerTurn = {}
 _G.PlayerTurn = PlayerTurn
 
+-- Turn-based resources remaining
 _G.playerHasAction = true
 _G.playerHasBonusAction = true
+_G.playerHasReacion = true
+_G.playerCanDodge = true
+_G.playerCanParry = true
+_G.playerCanBlock = true
 
 local actionBar = nil  -- Initialize actionBar as nil
 local spellSlots = {}
@@ -27,8 +32,13 @@ local healthBar, manaBar, healthText, manaText
 function PlayerTurn:OnPlayerTurn()
     print("### Your turn has begun! ###")
     
+    -- Restore the player's turn-based resources
     _G.playerHasAction = true
     _G.playerHasBonusAction = true
+    _G.playerHasReacion = true
+    _G.playerCanDodge = true
+    _G.playerCanParry = true
+    _G.playerCanBlock = true
 
     ShowPlayerTurnUI()
 
@@ -298,6 +308,12 @@ function CreateActionBarSlots(rows, columns, startX, startY)
     end
 end
 
+function ClearSpellSlots()
+    for slot, _ in ipairs(spellSlots) do
+        spellSlots[slot].icon:Hide()
+    end
+end
+
 function RefreshActionBar()
     -- print("Refreshing action bar...")
 
@@ -305,8 +321,10 @@ function RefreshActionBar()
 
     -- Loop through each slot in _G.equippedSpells
     -- print(#_G.equippedSpells)
+    ClearSpellSlots()
     for slot, spell in pairs(_G.equippedSpells) do
         -- print("Slot " ..slot.. " | Spell: " ..spell.Name)
+
         DrawSpellAtSlot(slot)  -- Call the function to draw the spell at the given slot
     end
 end

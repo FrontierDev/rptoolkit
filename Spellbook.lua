@@ -3,6 +3,68 @@ _G.Spellbook = _G.Spellbook or {}
 
 _G.spellbookSlots = _G.spellbookSlots or {}
 
+local specialisations = {
+    ["General"] = { "General" },
+    ["Death Knight"] = { "Blood", "Frost", "Unholy" },
+    ["Demon Hunter"] = { "Havoc", "Vengeance" },
+    ["Druid"] = { "Balance", "Feral", "Guardian", "Restoration" },
+    ["Evoker"] = { "Devastation", "Preservation", "Augmentation" },
+    ["Hunter"] = { "Beast Mastery", "Marksmanship", "Survival" },
+    ["Mage"] = { "Arcane", "Fire", "Frost" },
+    ["Monk"] = { "Brewmaster", "Mistweaver", "Windwalker" },
+    ["Paladin"] = { "Holy", "Protection", "Retribution" },
+    ["Priest"] = { "Discipline", "Holy", "Shadow" },
+    ["Rogue"] = { "Assassination", "Outlaw", "Subtlety" },
+    ["Shaman"] = { "Elemental", "Enhancement", "Restoration" },
+    ["Warlock"] = { "Affliction", "Demonology", "Destruction" },
+    ["Warrior"] = { "Arms", "Fury", "Protection" }
+}
+
+function Spellbook:CreateDropdowns(parentFrame)
+    -- Class Dropdown
+    local selectedClass = "General"
+    self.ClassDropdown = CreateFrame("Frame", "ClassDropdown", parentFrame, "UIDropDownMenuTemplate")
+    self.ClassDropdown:SetPoint("TOPLEFT", parentFrame, "TOPLEFT", 50, -35)
+
+    UIDropDownMenu_Initialize(self.ClassDropdown, function(self, level, menuList)
+        for className, _ in pairs(specialisations) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = className
+            info.func = function()
+                selectedClass = className
+                UIDropDownMenu_SetText(self, className)
+                Spellbook:UpdateSpecialisationDropdown(className)
+                Spellbook:UpdateSpellbookUI()
+            end
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+    UIDropDownMenu_SetText(self.ClassDropdown, "Any Class")
+
+    -- Specialisation Dropdown
+    self.SpecialisationDropdown = CreateFrame("Frame", "SpecialisationDropdown", parentFrame, "UIDropDownMenuTemplate")
+    self.SpecialisationDropdown:SetPoint("TOPLEFT", self.ClassDropdown, "TOPRIGHT", 100, 0)
+    UIDropDownMenu_SetText(self.SpecialisationDropdown, "Any Specialisation")
+    
+    self:UpdateSpecialisationDropdown("Any")
+end
+
+function Spellbook:UpdateSpecialisationDropdown(className)
+    UIDropDownMenu_Initialize(self.SpecialisationDropdown, function(self, level, menuList)
+        for _, spec in ipairs(specialisations[className] or { "Any" }) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = spec
+            info.func = function()
+                UIDropDownMenu_SetText(self, spec)
+                Spellbook:UpdateSpellbookUI()
+            end
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+    UIDropDownMenu_SetText(self.SpecialisationDropdown, "Any Specialisation")
+end
+
+
 function Spellbook:LoadSpellsFromCampaign(guid)
     -- Ensure the spellbook is a table, not a function
     if type(_G.Spellbook) ~= "table" then
@@ -99,6 +161,8 @@ function Spellbook:Create(parentFrame)
     self.frame:SetSize(360, 500)
     self.frame:SetPoint("TOPLEFT", parentFrame, "TOPLEFT", 7, -10)
 
+    self:CreateDropdowns(self.frame)
+
     -- Define grid layout for spell slots
     local SLOT_SIZE, SLOT_PADDING, COLUMNS, ROWS = 64, -16, 7, 8
     local TOTAL_SLOTS = COLUMNS * ROWS
@@ -136,6 +200,7 @@ function Spellbook:Create(parentFrame)
         slot.glowBorder:Hide()
 
         slot.spell = nil
+        slot.equipped = false
 
         -- ✅ Use CTSpell Tooltip on Hover & Glow Border
         slot:SetScript("OnEnter", function(self)
@@ -153,13 +218,21 @@ function Spellbook:Create(parentFrame)
         -- ✅ Right-click to Equip Spell to First Available Action Bar Slot (Starting at 11)
         slot:SetScript("OnMouseDown", function(self, button)
             if button == "RightButton" and self.spell then
-                local firstAvailableSlot = Spellbook:FindFirstAvailableActionSlot()
-                if firstAvailableSlot then
-                    CTSpell:EquipSpell(self.spell.Guid, firstAvailableSlot)  -- Equip spell&#8203;:contentReference[oaicite:0]{index=0}
-                    -- print(string.format("✅ Equipped spell: %s in action bar slot %d", self.spell.Name, firstAvailableSlot))
-                    _G.RefreshActionBar()
+                if not slot.equipped then
+                    local firstAvailableSlot = Spellbook:FindFirstAvailableActionSlot()
+                    if firstAvailableSlot then
+                        CTSpell:EquipSpell(self.spell.Guid, firstAvailableSlot)
+                        slot.equipped = true
+                        Spellbook:HighlightEquippedSpell(slot, true)
+                        _G.RefreshActionBar()
+                    else
+                        print("|cffff0000No available action bar slots!|r")
+                    end
                 else
-                    print("|cffff0000No available action bar slots!|r")
+                    CTSpell:UnequipSpell(self.spell.Guid)
+                    slot.equipped = false
+                    Spellbook:HighlightEquippedSpell(slot, false)
+                    _G.RefreshActionBar()
                 end
             end
         end)
@@ -168,6 +241,30 @@ function Spellbook:Create(parentFrame)
     end
 
     self.frame:Hide()
+end
+
+function Spellbook:HighlightEquippedSpell(slot, highlighted)
+    -- Add the glow effect if it hasn't been added already
+    if not slot.glow and highlighted then
+        -- Create a new glow texture
+        local glow = slot:CreateTexture(nil, "ARTWORK")  -- Use ARTWORK to ensure it sits above other textures
+        glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")  -- A simple, standard border texture
+        glow:SetBlendMode("ADD")  -- Set blend mode to make it glow
+
+        -- Manually adjust the size of the glow texture
+        glow:SetWidth(slot.icon:GetWidth() * 2.2)  -- Increase the width by 20% (or adjust to your preference)
+        glow:SetHeight(slot.icon:GetHeight() * 2.2)  -- Increase the height by 20% (or adjust to your preference)
+
+        glow:SetPoint("CENTER", slot.icon, "CENTER")  -- Center the glow around the icon
+        glow:SetAlpha(0.8)  -- Adjust the glow intensity (feel free to tweak this value)
+
+        -- Store the glow texture for later removal
+        slot.glow = glow
+    elseif slot.glow and highlighted then
+        slot.glow:Show()
+    elseif slot.glow and not highlighted then
+        slot.glow:Hide()
+    end    
 end
 
 -- ✅ Find First Available Action Bar Slot (Starting from Index 11)
@@ -202,21 +299,29 @@ function Spellbook:AddToSlots(spellData)
 end
 
 function Spellbook:UpdateSpellbookUI()
-    if not _G.spellbookSlots or #_G.spellbookSlots == 0 then
-        return
+    local selectedClass = UIDropDownMenu_GetText(self.ClassDropdown)
+    local selectedSpecialisation = UIDropDownMenu_GetText(self.SpecialisationDropdown)
+    
+    for _, slot in ipairs(_G.spellbookSlots) do
+        slot.icon:Hide()
+        slot.spell = nil
     end
 
-    local slotIndex = 1  -- Track available slot index
-
+    local slotIndex = 1
     for _, spell in ipairs(_G.Spellbook) do
-        if not spell.BuiltIn and slotIndex <= #_G.spellbookSlots then  -- Only add non built-in spells
-            _G.spellbookSlots[slotIndex].spell = spell
-            _G.spellbookSlots[slotIndex].icon:SetTexture(spell.Icon or "Interface\\Icons\\INV_Misc_QuestionMark")
-            _G.spellbookSlots[slotIndex].icon:Show()
-
-            slotIndex = slotIndex + 1  -- Move to the next available slot
+        if not spell.BuiltIn and 
+           (spell.Class == selectedClass or selectedClass == "Any Class") and
+           (spell.Specialisation == selectedSpecialisation or selectedSpecialisation == "Any Specialisation") then
+            local slot = _G.spellbookSlots[slotIndex]
+            if slot then
+                slot.spell = spell
+                slot.icon:SetTexture(spell.Icon)
+                slot.icon:Show()
+                slotIndex = slotIndex + 1
+            end
         end
     end
 end
+
 
 

@@ -77,6 +77,11 @@ function ReactionFrame:Prompt_MeleeDefensive(attacker, threshold, school)
     end
     self.ActionButtons = {}
 
+    if not _G.playerCanBlock and not _G.playerCanParry and not _G.playerCanDodge then
+        PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "FAIL", "MELEE", school)
+        return
+    end
+
     -- Create Parry, Dodge, and Block Icon Buttons
     local actionIcons = {
         { name = "Parry", icon = "Interface\\ICONS\\ability_parry" },
@@ -104,17 +109,32 @@ function ReactionFrame:Prompt_MeleeDefensive(attacker, threshold, school)
         icon:SetAllPoints(iconButton)
         icon:SetTexture(action.icon)
 
+        local canUseAction = true
+        if action.name == "Block" and not _G.playerCanBlock then
+            canUseAction = false
+            icon:SetDesaturated(true)
+        elseif action.name == "Parry" and not _G.playerCanParry then
+            canUseAction = false
+            icon:SetDesaturated(true)
+        elseif action.name == "Dodge" and not _G.playerCanDodge then
+            canUseAction = false
+            icon:SetDesaturated(true)
+        end
+
         -- Button click action
         iconButton:SetScript("OnClick", function()
-            print(action.name .. " defense selected")
+            if not canUseAction then return end
 
             local roll = 0
             if action.name == "Block" then
                 roll = Dice.Roll("1d20", "Block", "blockBonus", false, "ALL")
+                _G.playerCanBlock = false
             elseif action.name == "Parry" then
                 roll = Dice.Roll("1d20", "Parry", "parryBonus", false, "ALL")
+                _G.playerCanParry = false
             elseif action.name == "Dodge" then
                 roll = Dice.Roll("1d20", "Dodge", "dodgeBonus", false, "ALL")
+                _G.playerCanDodge = false
             end
 
             if tonumber(roll) < tonumber(threshold) then
@@ -139,6 +159,11 @@ function ReactionFrame:Prompt_RangedDefensive(attacker, threshold, school)
     -- Set the title and text prompt
     self.Title:SetText("Attacker: " ..attacker)
     self.PromptText:SetText("Choose a defensive roll.")
+
+    if not _G.playerCanBlock and not _G.playerCanDodge then
+        PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "FAIL", "RANGED", school)  
+        return
+    end
 
     -- Clear previous buttons
     for _, button in pairs(self.ActionButtons) do
@@ -172,6 +197,15 @@ function ReactionFrame:Prompt_RangedDefensive(attacker, threshold, school)
         icon:SetAllPoints(iconButton)
         icon:SetTexture(action.icon)
 
+        local canUseAction = true
+        if action.name == "Block" and not _G.playerCanBlock then
+            canUseAction = false
+            icon:SetDesaturated(true)
+        elseif action.name == "Dodge" and not _G.playerCanDodge then
+            canUseAction = false
+            icon:SetDesaturated(true)
+        end
+
         -- Button click action
         iconButton:SetScript("OnClick", function()
             print(action.name .. " defense selected")
@@ -183,11 +217,13 @@ function ReactionFrame:Prompt_RangedDefensive(attacker, threshold, school)
                 roll = Dice.Roll("1d20", "Parry", "parryBonus", false, "ALL")
             elseif action.name == "Dodge" then
                 roll = Dice.Roll("1d20", "Dodge", "dodgeBonus", false, "ALL")
+                _G.playerCanDodge = false
             end
 
             if tonumber(roll) < tonumber(threshold) then
                 print("Failed " ..action.name.. "!")
                 PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "FAIL", "RANGED", school)
+                _G.playerCanBlock = false
             else
                 print("Succeeded " ..action.name.. "!")
                 PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "SUCCESS", "RANGED", school)

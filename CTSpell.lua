@@ -116,11 +116,9 @@ end
 function CTSpell:Use(guid)
     -- Find the spell by its GUID
     local spellToUse
-    for _, spell in pairs(spellbook) do
-        print(spell.Guid)
-
-        if spell.Guid == guid then
-            spellToUse = spell
+    for _, spellEntry in pairs(spellbook) do
+        if type(spellEntry) == "table" and spellEntry.Guid == guid then
+            spellToUse = spellEntry
             break
         end
     end
@@ -315,6 +313,28 @@ function CTSpell:EquipSpell(guid, slot)
     -- print(string.format("Equipped spell: %s (%s) in action bar slot %d", spellToEquip.Name, spellToEquip.Guid, slot))
 end
 
+function CTSpell:UnequipSpell(guid)
+    -- Ensure Spellbook is a table
+    if type(_G.Spellbook) ~= "table" then
+        return
+    end
+
+    -- Find the spell by its GUID
+    local slotToClear = nil
+
+    -- print("Looking for spell with GUID:", guid)
+
+    print("Searching for " ..guid)
+    for slot, spellData in pairs(_G.equippedSpells) do
+        print(spellData.Guid)
+        if spellData.Guid == guid then
+            print("... FOUND")
+            _G.equippedSpells[slot] = nil
+            table.remove(_G.equippedSpells, slot)
+            break
+        end
+    end    
+end
 
 -- Show the tooltip for a spell
 function CTSpell:ShowTooltip(spell, slot)
