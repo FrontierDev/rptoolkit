@@ -1,4 +1,4 @@
--- Init
+﻿-- Init
 local UnitFrameTurn = {}
 _G.UnitFrameTurn = UnitFrameTurn
 local ADDON_PREFIX = "CTUF"
@@ -13,6 +13,55 @@ local actionsRemaining = 0
 UnitFrameTurn.actionsRemaining = actionsRemaining
 
 UnitFrameTurn.AwaitingPlayers = {}
+
+local function DrawUserSpells(unitFrame)
+    -- Ensure unit frame and spells exist
+    if not unitFrame or not unitFrame.UFSpells or #unitFrame.UFSpells == 0 then 
+        return 
+    end
+
+    -- Clear previous icons before redrawing
+    if TurnFrame.UserSpellIcons then
+        for _, icon in pairs(TurnFrame.UserSpellIcons) do
+            icon:Hide()
+            icon:SetParent(nil)
+        end
+    end
+    TurnFrame.UserSpellIcons = {}
+
+    local userSpells = unitFrame.UFSpells  -- Retrieve the spell list
+
+    for i, spell in ipairs(userSpells) do
+        -- Ensure the spell has a valid name
+        if not spell.Name then
+            print("Warning: Spell at index " .. i .. " is missing a name.")
+            spell.Name = "Unnamed Spell"
+        end
+
+        -- ✅ Create spell button inside TurnFrame
+        local iconFrame = CreateFrame("Button", nil, TurnFrame)
+        iconFrame:SetSize(32, 32)
+        iconFrame:SetPoint("TOPLEFT", TurnFrame, "TOPLEFT", ((i - 1) % 5) * 34 + 10, -120)
+        iconFrame:Show()
+
+        -- ✅ Create and set the spell's icon texture
+        local iconTexture = iconFrame:CreateTexture(nil, "ARTWORK")
+        iconTexture:SetAllPoints(iconFrame)
+        iconTexture:SetTexture("Interface\\ICONS\\" ..spell.Icon or "Interface\\ICONS\\INV_Misc_QuestionMark") -- Uses spell icon
+
+        iconFrame:SetScript("OnClick", function()
+            if UnitFrameTurn.actionsRemaining == 0 then return end
+
+            local maxTargets = 1  -- Modify maxTargets if necessary for each action
+            local action = string.format("USER[%s]", i)
+
+            UnitFrameTurn:ShowTargetPopup(action, maxTargets)
+        end)
+
+        -- ✅ Store the icon in UserSpellIcons
+        TurnFrame.UserSpellIcons[spell.Name] = iconFrame
+    end
+end
 
 local function DisplayBasicActions()
     -- Basic Action Icons
@@ -41,7 +90,6 @@ local function DisplayBasicActions()
 
         -- Set the click event for the icon, which will be updated later
         iconFrame:SetScript("OnClick", function()
-            print(UnitFrameTurn.actionsRemaining)
             if UnitFrameTurn.actionsRemaining == 0 then return end
 
             local maxTargets = 1  -- Modify maxTargets if necessary for each action
@@ -54,6 +102,46 @@ local function DisplayBasicActions()
                 UnitFrameTurn:ShowTargetPopup("Spell", maxTargets)
             end
         end)
+    end
+end
+
+local function UpdateUserSpells()
+    if not TurnFrame.UserSpellIcons then 
+        print("There are no user spell icons in the turn frame.")
+        return 
+    end
+
+    for spellName, iconFrame in pairs(TurnFrame.UserSpellIcons) do
+        -- ✅ Get the existing texture from the frame
+        local iconTexture = iconFrame:GetRegions()
+
+        -- ✅ Ensure texture exists before modifying
+        if not iconTexture then
+            print("Error: No texture found for", spellName)
+        else
+            -- Find the spell based on its name
+            local spell = nil
+            for _, userSpell in ipairs(unit.UFSpells or {}) do
+                if userSpell.Name == spellName then
+                    spell = userSpell
+                    break
+                end
+            end
+
+            -- ✅ If the spell exists, update the icon texture
+            if spell then
+                iconTexture:SetTexture("Interface\\ICONS\\" ..spell.Icon or "Interface\\ICONS\\INV_Misc_QuestionMark")
+            end
+
+            -- Check if actionsRemaining is 0, if so, grey out and disable the icon
+            if UnitFrameTurn.actionsRemaining == 0 then
+                iconTexture:SetVertexColor(0.5, 0.5, 0.5)  -- Grey out the icon
+                iconFrame:EnableMouse(false)  -- Disable clicking
+            else
+                iconTexture:SetVertexColor(1, 1, 1)  -- Restore normal color
+                iconFrame:EnableMouse(true)  -- Enable clicking
+            end
+        end
     end
 end
 
@@ -90,12 +178,8 @@ local function UpdateBasicActions()
     end
 end
 
-
-
-
 function UnitFrameTurn:ShowTargetPopup(action, maxTargets)
     maxTargets = maxTargets or 1  -- Default to 1 target if not provided
-    print("Showing target popup for "  .. action.. " (Max Targets: " .. maxTargets .. ")")
 
     -- Clear previous elements
     for _, element in pairs(TargetPopup.Elements or {}) do
@@ -196,7 +280,6 @@ function UnitFrameTurn:ShowTargetPopup(action, maxTargets)
 
             -- If already at max targets, prevent further selection
             if selectedCount >= maxTargets and not TargetPopup.SelectedTargets[unitName] then
-                print("Maximum targets selected!")
                 return
             end
 
@@ -205,12 +288,10 @@ function UnitFrameTurn:ShowTargetPopup(action, maxTargets)
                 -- Deselect target
                 TargetPopup.SelectedTargets[unitName] = nil
                 frame:SetAlpha(1)  -- Reset transparency
-                print("Deselected:", unitName)
             else
                 -- Select target
                 TargetPopup.SelectedTargets[unitName] = true
                 frame:SetAlpha(0.5)  -- Dim to indicate selection
-                print("Selected:", unitName)
             end
 
             -- Recalculate selected count
@@ -241,8 +322,7 @@ function UnitFrameTurn:ShowTargetPopup(action, maxTargets)
                 table.insert(selectedUnits, unitName)
             end
 
-            print("Action: " ..action)
-            UnitFrameTurn:UseBasicAction(action, TargetPopup.SelectedTargets)
+            UnitFrameTurn:UseAction(action, TargetPopup.SelectedTargets)
             TargetPopup:Hide()
         end)
     else
@@ -252,8 +332,7 @@ function UnitFrameTurn:ShowTargetPopup(action, maxTargets)
                 table.insert(selectedUnits, unitName)
             end
 
-            print("Action: " ..action)
-            UnitFrameTurn:UseBasicAction(action, TargetPopup.SelectedTargets)
+            UnitFrameTurn:UseAction(action, TargetPopup.SelectedTargets)
             TargetPopup:Hide()
         end)
     end
@@ -262,31 +341,78 @@ function UnitFrameTurn:ShowTargetPopup(action, maxTargets)
     TargetPopup:Show()
 end
 
-function UnitFrameTurn:UseBasicAction(action, selectedTargets)
+function UnitFrameTurn:UseAction(action, selectedTargets)
+    -- ✅ Handle basic actions (Melee, Ranged, Spell)
     if action == "Melee" or action == "Ranged" or action == "Spell" then
-        print("Action: " ..action)
         UnitFrameTurn:Action_BasicAttack(selectedTargets, action)
+
+    -- ✅ Handle user-defined spells (USER[XXX])
+    elseif string.sub(action, 1, 4) == "USER" then
+
+        -- ✅ Extract the spell index from "USER[XXX]"
+        local index = tonumber(string.match(action, "USER%[(%d+)%]"))  
+
+        -- ✅ Ensure index is valid before proceeding
+        if index and unit.UFSpells and unit.UFSpells[index] then
+            local spell = unit.UFSpells[index]
+            UnitFrameTurn:Action_UserAttack(selectedTargets, spell, action)  
+        else
+            print("Error: Invalid user spell index:", action)
+        end
     end
 
-    unit.ActionsRemaining = unit.ActionsRemaining  - 1
+    -- ✅ Reduce remaining actions
+    unit.ActionsRemaining = unit.ActionsRemaining - 1
     UnitFrameTurn:UpdateActionsRemaining()
 
+    -- ✅ Lock portrait if no actions remain
     if unit.ActionsRemaining == 0 then
-        print("Locking portrait; no actions remaining...")
         UnitFrameTurn:Send_LockPortrait(unit.NPCName)
     end
 end
 
+
 function UnitFrameTurn:Action_BasicAttack(selectedTargets, type)
     for unitName, _ in pairs(selectedTargets) do
-        print(TurnFrame.UnitName:GetText().. " used a basic " ..type.. " attack on " ..unitName)
-
         -- Request a roll from the player.
-        PlayerReaction:Request_Defensive(TurnFrame.UnitName:GetText(), unitName, unit.OffensiveModifiers[type].ac, type:upper(), unit.OffensiveModifiers[type].school)
+        PlayerReaction:Request_Defensive(TurnFrame.UnitName:GetText(), unitName, unit.OffensiveModifiers[type].ac, type:upper(), unit.OffensiveModifiers[type].school, type:upper())
         table.insert(UnitFrameTurn.AwaitingPlayers, unitName)
-        print("Now awaiting player " ..unitName)
     end
 end
+
+function UnitFrameTurn:Action_UserAttack(selectedTargets, spell, identifier)
+    if not spell then
+        print("Error: Attempted to use a user spell, but spell data is missing.")
+        return
+    end
+
+    for unitName, _ in pairs(selectedTargets) do
+        print(TurnFrame.UnitName:GetText() .. " used " .. spell.Name .. " on " .. unitName)
+
+        -- Determine spell type (e.g., damage, heal, or effect-based)
+        if spell.Type == "Melee" or spell.Type == "Physical" or spell.Type == "Spell" then
+            -- **Trigger Defensive Reaction from Target**
+            PlayerReaction:Request_Defensive(
+                TurnFrame.UnitName:GetText(),
+                unitName,
+                spell.DC,
+                spell.Type:upper(),
+                spell.School,
+                identifier
+            )
+
+            -- Mark target as awaiting a response
+            table.insert(UnitFrameTurn.AwaitingPlayers, unitName)
+        elseif spell.Type == "Heal" then
+            print("Healing action executed!")
+            -- Healing logic can be implemented here, e.g., applying a healing effect.
+
+        else
+            print("Unrecognized spell type:", spell.Type)
+        end
+    end
+end
+
 
 -- Create the UnitFrameTurn UI
 TurnFrame = CreateFrame("Frame", "UnitFrameTurnWindow", UIParent, "BackdropTemplate")
@@ -323,6 +449,21 @@ TurnFrame.ActionsRemainingText:SetText("Actions: 0") -- Default
 TurnFrame.BasicActionsHeader = TurnFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 TurnFrame.BasicActionsHeader:SetPoint("TOPLEFT", TurnFrame, "TOPLEFT", 10, -40)
 TurnFrame.BasicActionsHeader:SetText("Basic Actions")
+
+-- End Turn Button
+TurnFrame.EndTurnButton = CreateFrame("Button", nil, TurnFrame, "UIPanelButtonTemplate")
+TurnFrame.EndTurnButton:SetSize(100, 25)
+TurnFrame.EndTurnButton:SetPoint("BOTTOM", TurnFrame, "BOTTOM", 0, 10)
+TurnFrame.EndTurnButton:SetText("End Turn")
+
+TurnFrame.EndTurnButton:SetScript("OnClick", function()
+    UnitFrameTurn.actionsRemaining = 0
+    unit.ActionsRemaining = 0
+    UnitFrameTurn:UpdateActionsRemaining()
+    UnitFrameTurn:Send_LockPortrait(unit.NPCName)
+    TurnFrame:Hide()
+end)
+
 
 -- Display the NPC's basic actions (basic melee, ranged, spell attack; dash; disengage)
 DisplayBasicActions()
@@ -362,11 +503,26 @@ function UnitFrameTurn:UpdateActionsRemaining()
     TurnFrame.ActionsRemainingText:SetText("Actions: " .. UnitFrameTurn.actionsRemaining)
 
     UpdateBasicActions()
+    UpdateUserSpells()
 end
+
+function UnitFrameTurn:ClearTurnUI()
+    -- ✅ Hide previous spell icons
+    if TurnFrame.UserSpellIcons then
+        for _, icon in pairs(TurnFrame.UserSpellIcons) do
+            icon:Hide()
+            icon:SetParent(nil)
+        end
+    end
+    TurnFrame.UserSpellIcons = {}
+end
+
 
 -- Function to Show the UnitFrameTurn UI
 function UnitFrameTurn:ShowTurnUI(unitFrame)
     if not unitFrame then return end
+
+    UnitFrameTurn:ClearTurnUI()
 
     unit = unitFrame
 
@@ -384,12 +540,15 @@ function UnitFrameTurn:ShowTurnUI(unitFrame)
         TurnFrame.RaidMarker:Hide()
     end
 
+    -- Display the basic spells.
     UnitFrameTurn:UpdateActionsRemaining()
     UpdateBasicActions()
 
-    -- Debug Message
-    print("UnitFrameTurn opened for:", unitFrame.NPCName)
+    -- ✅ Ensure user spells are displayed correctly
+    DrawUserSpells(unit)
+    UpdateUserSpells()
 end
+
 
 function UnitFrameTurn:Send_LockPortrait(unitFrame)
     local message = string.format("LOCK:%s", unitFrame)

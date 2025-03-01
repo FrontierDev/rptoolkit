@@ -21,6 +21,7 @@ local numBatches = 1  -- Default 1 batch, will be updated based on group size
 local batches = {}  -- Table to store the batches_G.groupMembers = groupMembers
 local activePortraits = {}
 local activeBatch = {}
+local isCombat = false
 local batchMode = true
 
 TurnTracker.NumBatches = numBatches
@@ -46,13 +47,77 @@ TurnTracker.turnLabel:SetFont("Fonts\\FRIZQT__.TTF", 16, "OUTLINE")
 TurnTracker.turnLabel:SetPoint("BOTTOM", TurnTracker.icon, "TOP", 0, 10)
 TurnTracker.turnLabel:SetText("Turn")
 
+-- Create Next Turn Button
+local nextTurnButton = CreateFrame("Button", "NextTurnButton", TurnTracker)
+nextTurnButton:SetSize(32, 32)
+nextTurnButton:SetPoint("BOTTOM", TurnTracker, "BOTTOM", 0, 0)
+nextTurnButton:SetNormalTexture("Interface\\Icons\\misc_arrowright")
+nextTurnButton:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+
+-- Glow Effect on Hover
+local glow = nextTurnButton:CreateTexture(nil, "OVERLAY")
+glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+glow:SetPoint("CENTER", nextTurnButton, "CENTER")
+glow:SetSize(50, 50)
+glow:SetBlendMode("ADD")
+glow:Hide()
+glow:SetAlpha(0.5)
+
+nextTurnButton:SetScript("OnEnter", function(self)
+    self:SetAlpha(1)
+    glow:Show()
+end)
+
+nextTurnButton:SetScript("OnLeave", function(self)
+    self:SetAlpha(1)
+    glow:Hide()
+end)
+
+nextTurnButton:SetScript("OnClick", function()
+    if UnitIsGroupLeader("player") then
+        TurnTracker:NextTurn()
+    else
+        print("[CTSTurnTracker] Only the group leader can advance the turn.")
+    end
+end)
+
+-- Ensure button visibility updates with the tracker
+hooksecurefunc(TurnTracker, "Show", function()
+    if UnitIsGroupLeader("player") then
+        nextTurnButton:Show()
+    else
+        nextTurnButton:Hide()
+    end
+end)
+
+hooksecurefunc(TurnTracker, "Hide", function()
+    nextTurnButton:Hide()
+end)
+
+
+
+
 -- Function to create and display a single portrait or model for a player/NPC
 local function CreatePortrait(parentFrame, unit, playerName)
     -- Create a frame to hold the portrait
-    local portraitFrame = CreateFrame("Frame", nil, parentFrame)
+    local portraitFrame = CreateFrame("Button", nil, parentFrame, "SecureActionButtonTemplate")
     portraitFrame:SetSize(48, 48)
     
     portraitFrame.Locked = false
+
+    -- Enable mouse interaction
+    portraitFrame:EnableMouse(true)
+
+    -- Tooltip functions
+    portraitFrame:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(playerName, 1, 1, 1)
+        GameTooltip:Show()
+    end)
+
+    portraitFrame:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
 
     -- Circular Border (for portrait styling)
     local circularBorder = portraitFrame:CreateTexture(nil, "BORDER")
@@ -164,8 +229,6 @@ local function UpdateGroupMembers()
             end
         end
     end
-
-    -- print("[CTSTurnTracker] Updated group members:", table.concat(groupMembers, ", "))
 end
 
 
@@ -206,7 +269,7 @@ local function UpdateTurnTracker()
     UnitFrames:HighlightActiveBatch(activeBatch)
 
     if UnitIsGroupLeader("Player") then
-        UnitFrames:UpdateNpcTurnButtons(activeBatch)
+        UnitFrames:OnUnitFrameTurn(activeBatch)
     end
 
     -- Tick down any buffs that are active
@@ -384,7 +447,9 @@ function LockPortrait(playerName)
         end
     end
     
-    if not anyActive and UnitIsGroupLeader("player") then TurnTracker:NextTurn() end
+    if not anyActive and UnitIsGroupLeader("player") then 
+        TurnTracker:NextTurn() 
+    end
 end
 
 
@@ -523,7 +588,7 @@ local function MonitorAllRolls(rollGuid, ticker)
 end
 
 -- Function to sort groupMembers by initiative and separate players and NPCs
-local function SortGroupMembersByInitiative()
+function TurnTracker:SortGroupMembersByInitiative()
     local players = {}
     local npcs = {}
 
@@ -531,7 +596,9 @@ local function SortGroupMembersByInitiative()
     for _, playerName in ipairs(groupMembers) do
         if UnitIsPlayer(playerName) then
             -- Add player to the players table
-            table.insert(players, {name = playerName, initiative = Dice.rollResults[initiativeGuid][playerName]})
+            if  Dice.rollResults and Dice.rollResults[initiativeGuid] then
+                table.insert(players, {name = playerName, initiative = Dice.rollResults[initiativeGuid][playerName] or 0})
+            end
         else
             -- Add NPC to the NPCs table
             table.insert(npcs, playerName)
@@ -551,19 +618,13 @@ local function SortGroupMembersByInitiative()
     for _, npc in ipairs(npcs) do
         table.insert(groupMembers, npc)
     end
-
-    -- Step 4: Print the final sorted turn order
-    -- print("[CTSTurnTracker] Final Turn Order:")
-    -- for i, member in ipairs(groupMembers) do
-    --    print(string.format("  %d. %s", i, member))
-    -- end
 end
 
 -- Function to batch group members (populate the batches table)
-local function BatchGroupMembers()
+function TurnTracker:BatchGroupMembers()
     -- Ensure groupMembers is populated
     UpdateGroupMembers()
-    SortGroupMembersByInitiative()
+    TurnTracker:SortGroupMembersByInitiative()
 
     local totalMembers = #groupMembers  -- Total number of group members
     local batchSize = 5  -- We are using 5 members per batch for now
@@ -584,11 +645,6 @@ local function BatchGroupMembers()
             currentBatchIndex = currentBatchIndex + 1
         end
     end
-
-    -- Print batches for debugging
-    -- for i, batch in ipairs(batches) do
-    --    print("[CTSTurnTracker] Batch " .. i .. ": " .. table.concat(batch, ", "))
-    -- end
 end
 
 
@@ -602,7 +658,6 @@ local function StartTurnTracker()
     end
 
     turnCounter = 0
-
     -- Roll initiative for all players and NPCs
     initiativeGuid = Dice.RequestRoll(nil, "initiative", "Initiative")  -- Start the roll request
     UpdateGroupMembers()  -- Update the list of group members (players and NPCs)
@@ -616,11 +671,13 @@ local function StartTurnTracker()
     resultTicker = C_Timer.NewTicker(1, function()
         if MonitorAllRolls(initiativeGuid, resultTicker) then
             Dice.PrintRollResults(initiativeGuid)
-            SortGroupMembersByInitiative()
-            BatchGroupMembers()         
+            TurnTracker:SortGroupMembersByInitiative()
+            TurnTracker:BatchGroupMembers()         
             SendTurnUpdate()
         end
     end)
+
+    isCombat = true
 end
 
 -- Function to handle next turn and switch to the next batch
@@ -687,6 +744,7 @@ local function EndTurnTracker()
 
     -- Reset the turn counter to 1 (combat phase begins from here)
     turnCounter = 1
+    isCombat = false
 
     -- Reset activePlayerName to nil to ensure it's cleared
     activePlayerName = "Unknown Player"
@@ -728,6 +786,10 @@ SlashCmdList["CTS"] = function(msg)
     end
 end
 
+local function OnRosterUpdate()
+    TurnTracker:BatchGroupMembers()
+end
+
 
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("CHAT_MSG_ADDON")
@@ -738,7 +800,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
     if event == "CHAT_MSG_ADDON" then
         HandleAddonMessage(...)
     elseif event == "GROUP_ROSTER_UPDATE" then
-        UpdateGroupMembers()
+        if IsInGroup() and UnitIsGroupLeader("player") then OnRosterUpdate() end
     elseif event == "PLAYER_ENTERING_WORLD" then
         -- Delay the sync request to ensure addon messages are available
         C_Timer.After(2, function()

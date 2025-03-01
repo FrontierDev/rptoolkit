@@ -28,7 +28,6 @@ end
 local function GetSpellTarget(spell)
     if spell.Requires then
         for _, requirement in ipairs(spell.Requires) do
-            print(requirement)
             if requirement == "TARGET_ALLY" then
                 return _G.Targeting.pcTarget
             elseif requirement == "TARGET_ENEMY" then
@@ -50,9 +49,22 @@ function CTSpell:CheckRequirements(spell)
         LEVEL = self.CheckLevelRequirement,
         TARGET_ENEMY = self.CheckNPCTarget,
         TARGET_ALLY = self.CheckPCTarget,
-        NOT_SELF = self.CheckPCTargetNotSelf
+        NOT_SELF = self.CheckPCTargetNotSelf,
+        SELF = self.CheckPCTargetIsSelf,
+        HASTE = self.CheckHaste
     }
 
+    -- Check cooldown requirement NYI
+
+    
+    -- Check mana cost requirement
+    if tonumber(spell.ManaCost) > 0 then
+        local playerMana = _G.hiddenStats["Mana"]
+
+        if tonumber(spell.ManaCost) >= playerMana then return false end
+    end
+
+    -- Check all other requirements
     if spell.Requires then
         for _, requirement in ipairs(spell.Requires) do
             -- print("Checking requirement: " .. requirement)
@@ -112,6 +124,18 @@ function CTSpell:CheckPCTargetNotSelf()
     end
 end
 
+function CTSpell:CheckPCTargetIsSelf()
+    if Targeting.pcTarget == UnitName("player") or Targeting.pcTarget == "NONE" then
+        return true
+    else
+        return false
+    end
+end
+
+function CTSpell:CheckHaste()
+    return _G.playerHasHaste
+end
+
  
 function CTSpell:Use(guid)
     -- Find the spell by its GUID
@@ -141,31 +165,35 @@ function CTSpell:Use(guid)
                 General = CTSpell.UseGeneralSpell,   -- Gets main hand damage dice and modifier
                 WeaponDamage = CTSpell.UseWeaponDamageSpell,           -- Gets off hand damage and modifier
                 Statistic = CTSpell.UseStatisticSpell,
-                SpellDamage = CTSpell.UseSpellDamageSpell
+                SpellDamage = CTSpell.UseSpellDamageSpell,
+                HealTarget = CTSpell.UseHealTargetSpell,
+                Aura_NoTick = CTSpell.Use_AuraNoTick,
+                Aura_Tick = CTSpell.Use_AuraTick
             }
 
             local func = spellTypeFunctions[spellToUse.Type]  
             if func then
                 -- Call the appropriate function for the spell type, passing `self` to preserve context
                 func(self, spellToUse)  -- Pass `spellToUse` to the function if needed
-
-                -- Apply all effects from the given spell.
-                if spellToUse.Auras then
-                    for _, aura in pairs(spellToUse.Auras) do                   
-                        CTSpell:ApplySpellAura(UnitName("player"), GetSpellTarget(spellToUse), aura, "Tick")
-                    end
-                end
             else
                 print("|cffff0000Unknown spell type: " .. spellToUse.Type.. "|r")
             end
         end
 
 
-        -- Action costs
+        -- Action costs (action, bonus action, haste action)
         if spellToUse.ActionCost == "Action" then
             _G.playerHasAction = false
         elseif spellToUse.ActionCost == "Bonus Action" then
             _G.playerHasBonusAction = false
+        elseif spellToUse.ActionCost == "Haste Attack" then
+            _G.playerHasHaste = false
+        end
+
+        -- Update health a mana.
+        if tonumber(spellToUse.ManaCost) > 0 then
+            _G.hiddenStats["Mana"] = _G.hiddenStats["Mana"] - tonumber(spellToUse.ManaCost)
+            _G.UpdateHealthAndMana()
         end
 
         _G.RefreshActionBar()
@@ -196,8 +224,78 @@ function CTSpell:RunScript(spellToUse)
     end
 end
 
+local function CheckForCrit(critModifier, roll)
+    -- Ensure critModifiers is valid
+    if not critModifier then
+        return false
+    end
+
+    -- Get the mapped stat name from the first modifier
+    local mappedModifierType = STAT_NAME_MAPPING[critModifier]
+
+    if not mappedModifierType then
+        print("Warning: No mapping found for", critModifier)
+        return false
+    end
+
+    local critThreshold = 20  -- Default critical hit threshold
+    local found = false
+
+    -- Check if combatStats table exists
+    if _G.combatStats then
+        -- Extract statType and statName (e.g., "Melee.crit" → "Melee", "crit")
+        local statType, statName = mappedModifierType:match("^(%a+)%.(%a+)$")
+
+        if statType and statName then
+            -- Check if nested structure exists
+            if _G.combatStats[statType] and _G.combatStats[statType][statName] then
+                critThreshold = 20 - _G.combatStats[statType][statName] or 20
+                found = true
+            else
+                print("No combat stat modifier found for " .. mappedModifierType)
+            end
+        else
+            print("Invalid format for combatStats: " .. mappedModifierType)
+        end
+    end
+
+    -- Check if the roll meets or exceeds the crit threshold
+    if (roll >= critThreshold) then return "CRIT_SUCCESS"
+    elseif roll == 1 then return "CRIT_FAIL"
+    else return "NOT_CRIT" end
+end
+
+
 function CTSpell:UseGeneralSpell(spellToUse)
     print(spellToUse.Message)
+end
+
+function CTSpell:Use_AuraNoTick(spellToUse)
+    local target = GetSpellTarget(spellToUse)
+    if target == "UNKNOWN" then
+        print("|cffff0000Error: Spell has an unknown target!|r")
+        return
+    end
+
+    if spellToUse.Auras then
+        for _, aura in pairs(spellToUse.Auras) do
+            CTSpell:ApplySpellAura(UnitName("player"), target, aura, false)
+        end
+    end
+end
+
+function CTSpell:Use_AuraTick(spellToUse)
+    local target = GetSpellTarget(spellToUse)
+    if target == "UNKNOWN" then
+        print("|cffff0000Error: Spell has an unknown target!|r")
+        return
+    end
+
+    if spellToUse.Auras then
+        for _, aura in pairs(spellToUse.Auras) do
+            CTSpell:ApplySpellAura(UnitName("player"), target, aura, true)
+        end
+    end
 end
 
 function CTSpell:UseStatisticSpell(spellToUse)
@@ -205,9 +303,45 @@ function CTSpell:UseStatisticSpell(spellToUse)
     Dice.Roll("1d20", spellToUse.Message, spellToUse.HitModifiers, false, "ALL")
 end
 
-function CTSpell:UseWeaponDamageSpell(spellToUse)
+function CTSpell:UseHealTargetSpell(spellToUse)
+    local target = GetSpellTarget(spellToUse)
+    if target == "UNKNOWN" then
+        print("|cffff0000Error: Spell has an unknown target!|r")
+        return
+    end
+    
+    local healingModifiers = spellToUse.DamageModifiers
+    local critModifier = spellToUse.CritModifier
 
+    -- Check for crit.
+    local baseRoll = Dice.Simple("1d20+0")
+    local critCheck = CheckForCrit("healCrit", baseRoll)
+    local coefficient = 1
+    local spellSender = string.format("%s's %s", UnitName("player"), spellToUse.Name)
+
+    if critCheck == "CRIT_SUCCESS" then 
+        coefficient = 2 + (_G.hiddenStats.CriticalStrikeDamage/100)
+    elseif critCheck == "CRIT_FAIL" then
+    else
+    end
+
+    -- Calculate and apply the healing done.
+    local healingDice = spellToUse.DiceToDamage
+    local spellName = spellToUse.Name
+    local message = string.format("healing (%s)", spellName)
+    if critCheck == "CRIT_SUCCESS" then message = string.format("healing (%s) (Critical, x%.1f)", spellName, coefficient) end
+
+    local healingRoll = coefficient * Dice.Roll(healingDice, message, healingModifiers, false, "HEALING")
+    Targeting:ApplyHealing(spellSender, target, math.floor(healingRoll + 0.5), "DIRECT") 
+
+    -- Apply any auras that are set to apply on hit.
+    if spellToUse.Auras then
+        for _, aura in pairs(spellToUse.Auras) do
+            CTSpell:ApplySpellAura(UnitName("player"), GetSpellTarget(spellToUse), aura, false)
+        end
+    end
 end
+
 
 -- Can only be used on enemy unit frames
 function CTSpell:UseSpellDamageSpell(spellToUse)
@@ -216,36 +350,112 @@ function CTSpell:UseSpellDamageSpell(spellToUse)
         print("|cffff0000Error: Spell has an unknown target!|r")
         return
     end
+
+    -- If the spell has dynamic modifiers (e.g., main hand attack depends on weapon), then get the actual
+    -- modifiers that should be used.
+    local hitModifiers = spellToUse.HitModifiers
+    local damageModifiers = spellToUse.DamageModifiers
+    local critModifier = spellToUse.CritModifier
+
+    if hitModifiers == "DYNAMIC" then
+        local mainHand = Equipment.equippedItems["Main Hand"]
+        
+        if mainHand.handedness == "Ranged" then
+            hitModifiers = { "rangedHit" }
+            damageModifiers = { "rangedBonus" }
+            critModifier = "rangedCrit"
+        elseif mainHand.handedness == "Wand" then
+            hitModifiers = { "spellHit" }
+            damageModifiers = { "spellBonus" }
+            critModifier = "spellCrit"
+        else
+            hitModifiers = { "meleeHit" }
+            damageModifiers = { "meleeBonus" }
+            critModifier = "meleeCrit"
+        end
+    end
     
     -- Roll to hit, if needed.
-    local hitRoll = Dice.Roll(spellToUse.DiceToHit, "Rolled to Hit", spellToUse.HitModifiers, false, "NO_SCROLL")
+    local hitRoll, baseRoll = Dice.Roll(spellToUse.DiceToHit, string.format("to hit (%s)", spellToUse.Name), hitModifiers, false, "NO_SCROLL")
+    
+    -- CHECK IF THE UNIT FRAME'S AC WAS BEAT
+    local target = GetSpellTarget(spellToUse)
 
-    -- NYI - CHECK IF THE AC WAS BEAT
-    -- ... ... ...
+    local function tableContains(tbl, value)
+        for _, v in ipairs(tbl) do
+            if v == value then return true end
+        end
+        return false
+    end
+
+    -- find the unit frame by cycling through 
+    local hit = false
+    for _, frame in pairs(UnitFrames.frames) do
+        if frame.isVisible and frame.NPCName == target then 
+            if tableContains(hitModifiers, "meleeHit") then
+                if hitRoll >= tonumber(frame.DefensiveAC.Melee) then hit = true end
+            elseif tableContains(hitModifiers, "rangedHit") then
+                if hitRoll >= tonumber(frame.DefensiveAC.Ranged) then hit = true end
+            elseif tableContains(hitModifiers, "spellHit") then
+                if hitRoll >= tonumber(frame.DefensiveAC.Spell) then hit = true end
+            end
+        end
+    end
+
+    -- Exit and print a 'Miss' text if the attack failed.
+    if not hit then
+        CombatLog:PrintMessage(string.format("Your %s failed to damage %s.", spellToUse.Name, target))
+        Common:CreateFloatingText("Miss", 1, 1, 1)
+        return
+    end
+
+    local critCheck = CheckForCrit(critModifier, baseRoll)
+    local coefficient = 1
+    local spellSender = string.format("%s's %s", UnitName("player"), spellToUse.Name)
+
+    if critCheck == "CRIT_SUCCESS" then 
+        -- print("YOU CRITICALL HIT.") 
+        coefficient = 2 + (_G.hiddenStats.CriticalStrikeDamage/100)
+    elseif critCheck == "CRIT_FAIL" then
+        -- print("Critical fail!")
+    else
+        -- print("NOT CRIT.")
+        -- Do nothing (wasn't a crit!)
+    end
 
     -- Roll to damage, if successful.
     if spellToUse.DiceToDamage:lower() == "mh" then
         local damageDice, weaponName = CTSpell:GetDamageDiceFromWeapon("Main Hand") 
-        damageRoll = Dice.Roll(damageDice, weaponName, spellToUse.DamageModifiers, false, "DAMAGE")
-        Targeting:ApplyDamage(target, damageRoll, spellToUse.School)
+        local message = string.format("damage (%s)", weaponName)
+        if critCheck == "CRIT_SUCCESS" then message = string.format("damage (%s) (Critical, x%.1f)", weaponName, coefficient) end
+
+        damageRoll = coefficient * Dice.Roll(damageDice, message, damageModifiers, false, "DAMAGE")
+        Targeting:ApplyDamage(spellSender, target, math.floor(damageRoll + 0.5), spellToUse.School or "Physical", "DIRECT")
 
     elseif spellToUse.DiceToDamage:lower() == "oh" then
         local damageDice, weaponName = CTSpell:GetDamageDiceFromWeapon("Off Hand") 
-        damageRoll = Dice.Roll(damageDice, weaponName, "ZERO", false, "DAMAGE")
-        Targeting:ApplyDamage(target, damageRoll, spellToUse.School)
+        local message = string.format("damage (%s)", weaponName)
+        if critCheck == "CRIT_SUCCESS" then message = string.format("damage (%s) (Critical, x%.1f)", weaponName, coefficient) end
+
+
+        damageRoll = coefficient * Dice.Roll(damageDice, message, "ZERO", false, "DAMAGE")
+        Targeting:ApplyDamage(spellSender, target, math.floor(damageRoll + 0.5), spellToUse.School or "Physical", "DIRECT")
 
     else
-        damageRoll = Dice.Roll(spellToUse.DiceToDamage, spellToUse.Name, spellToUse.DamageModifiers, false, "DAMAGE")
-        Targeting:ApplyDamage(target, damageRoll, spellToUse.School)
+        local message = string.format("damage (%s)", spellToUse.Name)
+        if critCheck == "CRIT_SUCCESS" then message = string.format("damage (%s) (Critical, x%.1f)", weaponName, coefficient) end
+
+        damageRoll = coefficient * Dice.Roll(spellToUse.DiceToDamage, message, damageModifiers, false, "DAMAGE")
+        Targeting:ApplyDamage(spellSender, target, math.floor(damageRoll + 0.5), spellToUse.School or "Physical", "DIRECT")
     end    
 
     -- Trigger any auras that have a TargetHit trigger.
-    CTAura:OnEnemyHit()
+    CTAura:OnEnemyHit(target)
 
     -- Apply any auras that are set to apply on hit.
     if spellToUse.Auras then
         for _, aura in pairs(spellToUse.Auras) do
-            CTSpell:ApplySpellAura(UnitName("player"), GetSpellTarget(spellToUse), aura, "HitTarget")
+            CTSpell:ApplySpellAura(UnitName("player"), GetSpellTarget(spellToUse), aura, false)
         end
     end
 end
@@ -270,8 +480,16 @@ function CTSpell:ApplySpellAura(caster, target, auraGUID, trigger)
     for _, campaign in pairs(_G.Campaigns) do
         if campaign.AuraList then
             for _, aura in ipairs(campaign.AuraList) do
-                if aura.Guid == auraGUID and aura.TriggerOn == trigger then
+                if aura.Guid == auraGUID then
                     CTAura:ApplyAura(target, caster, aura)
+
+                    -- If the aura should trigger immediately upon being applied.
+                    if trigger then
+                        if aura.ApplyTo == "Target" then CTAura:Trigger_Tick(aura, target)
+                        elseif aura.ApplyTo == "Caster" then CTAura:Trigger_Tick(aura, aura.Caster)
+                        end
+                    end
+
                     break               
                 end
             end
@@ -324,11 +542,8 @@ function CTSpell:UnequipSpell(guid)
 
     -- print("Looking for spell with GUID:", guid)
 
-    print("Searching for " ..guid)
     for slot, spellData in pairs(_G.equippedSpells) do
-        print(spellData.Guid)
         if spellData.Guid == guid then
-            print("... FOUND")
             _G.equippedSpells[slot] = nil
             table.remove(_G.equippedSpells, slot)
             break
@@ -382,7 +597,7 @@ function CTSpell:ShowTooltip(spell, slot)
 
 
     -- If the spell is not guaranteed to hit.
-    if spell.HitModifiers then
+    if spell.HitModifiers and spell.HitModifiers ~= "DYNAMIC" then
         local text
 
         -- Loop through each modifier in spell.HitModifiers
@@ -416,12 +631,31 @@ local builtin_mh_attack = {
     builtIn = true,  -- Is this a built-in spell?
     defaultSlot = 1,
     diceToHit = "1d20",  -- Dice for the spell (e.g., damage roll)
-    hitModifiers = { "meleeHit" },  -- Modifier (e.g., type of spell or damage modifier)
+    hitModifiers = "DYNAMIC",  -- Modifier (e.g., type of spell or damage modifier)
     diceToDamage = "mh",
-    critModifier = { "meleeCrit" },
-    damageModifiers = { "meleeBonus" }, -- The modifier to be applied to deal damage (e.g. melee bonus, ranged bonus, fire bonus...)
+    critModifier = "DYNAMIC",
+    damageModifiers = "DYNAMIC", -- The modifier to be applied to deal damage (e.g. melee bonus, ranged bonus, fire bonus...)
     scriptId = nil,
     requires = { "MAIN_HAND", "TARGET_ENEMY" }
+}
+
+local builtin_haste_attack = {
+    guid = "BUILTIN_HASTE_ATTACK",  -- Unique GUID for the spell
+    name = "Haste Attack",  -- Spell name
+    type = "SpellDamage",
+    school = "Physical",
+    actionCost = "Free Action",
+    icon = "Interface\\Icons\\ability_ardenweald_warrior",  -- Icon path
+    description = "Attack with your main hand weapon as a Haste attack.",  -- Spell description
+    builtIn = true,  -- Is this a built-in spell?
+    defaultSlot = 2,
+    diceToHit = "1d20",  -- Dice for the spell (e.g., damage roll)
+    hitModifiers = { "hasteHit" },  -- Modifier (e.g., type of spell or damage modifier)
+    diceToDamage = "mh",
+    critModifier = { "hasteCrit" },
+    damageModifiers = { "hasteBonus" }, -- The modifier to be applied to deal damage (e.g. melee bonus, ranged bonus, fire bonus...)
+    scriptId = nil,
+    requires = { "MAIN_HAND", "TARGET_ENEMY", "HASTE" }
 }
 
 local builtin_oh_attack = {
@@ -435,9 +669,9 @@ local builtin_oh_attack = {
     builtIn = true,  -- Is this a built-in spell?
     defaultSlot = 6,
     diceToHit = "1d20",  -- Dice for the spell (e.g., damage roll)
-    hitModifiers = {"meleeHit"},  -- Modifier (e.g., type of spell or damage modifier)
+    hitModifiers = { "meleeHit" },  -- Modifier (e.g., type of spell or damage modifier)
     diceToDamage = "oh",
-    damageModifiers = {"meleeBonus"}, -- The modifier to be applied to deal damage (e.g. melee bonus, ranged bonus, fire bonus...)
+    damageModifiers = { "meleeBonus" }, -- The modifier to be applied to deal damage (e.g. melee bonus, ranged bonus, fire bonus...)
     critModifier = "meleeCrit",
     scriptId = nil,
     requires = { "OFF_HAND", "TARGET_ENEMY" }
@@ -452,7 +686,7 @@ local builtin_disengage = {
     description = "Disengage from combat, preventing you from taking attacks of opportunity when moving.",  -- Spell description
     message = "disengages from combat.",
     builtIn = true,  -- Is this a built-in spell?
-    defaultSlot = 2,
+    defaultSlot = 4,
     scriptId = nil
 }
 
@@ -504,3 +738,4 @@ Spellbook:Add(builtin_disengage)
 Spellbook:Add(builtin_dash)
 Spellbook:Add(builtin_hide)
 Spellbook:Add(builtin_aid)
+Spellbook:Add(builtin_haste_attack)

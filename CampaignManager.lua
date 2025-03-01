@@ -154,71 +154,134 @@ local function SwitchTab(tabIndex)
 end
 
 --== CAMPAIGN EDITOR ==--
-function CampaignManager:PopulateCampaignDetails(guid)
-    local campaign = _G.Campaigns[guid] -- Retrieve the loaded campaign
-    if not campaign then return end
+local function PopulateParentDropdown()
+    local parentOptions = {}
 
-    -- Ensure the 'Details' tab UI elements exist before populating
+    -- Collect all existing parent categories
+    for _, campaign in pairs(_G.CampaignToolkitCampaignsDB) do
+        if campaign.Parent and campaign.Parent ~= "" and not parentOptions[campaign.Parent] then
+            parentOptions[campaign.Parent] = true
+        end
+    end
+
+    local sortedParents = {}
+    for parentName in pairs(parentOptions) do
+        table.insert(sortedParents, parentName)
+    end
+    table.sort(sortedParents)
+
+    -- Add 'New Parent' option at the bottom
+    table.insert(sortedParents, "New Parent")
+
+    return sortedParents
+end
+
+local function CreateParentDropdown(parentFrame)
+    local selectedParent = parentFrame.SelectedCampaign and _G.Campaigns[parentFrame.SelectedCampaign].Parent or "None"
+
+    -- Dropdown menu
+    parentFrame.ParentDropdown = CreateFrame("Frame", "ParentDropdown", parentFrame, "UIDropDownMenuTemplate")
+    parentFrame.ParentDropdown:SetPoint("TOPLEFT", parentFrame.CampaignName, "TOPRIGHT", 10, 0)
+
+    local function OnParentSelected(self, value)
+        if value == "New Parent" then
+            -- Show an input box for a new parent category
+            parentFrame.NewParentInput:Show()
+        else
+            -- Set the selected parent and hide the input box
+            parentFrame.NewParentInput:Hide()
+            _G.Campaigns[parentFrame.SelectedCampaign].Parent = value
+            CTCampaign:SaveCampaign()
+        end
+        UIDropDownMenu_SetText(parentFrame.ParentDropdown, value)
+    end
+
+    UIDropDownMenu_Initialize(parentFrame.ParentDropdown, function(self, level, menuList)
+        local parents = PopulateParentDropdown()
+
+        for _, parentName in ipairs(parents) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = parentName
+            info.func = function() OnParentSelected(self, parentName) end
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+
+    UIDropDownMenu_SetText(parentFrame.ParentDropdown, selectedParent)
+
+    -- New Parent Input Box
+    parentFrame.NewParentInput = CreateFrame("EditBox", nil, parentFrame, "InputBoxTemplate")
+    parentFrame.NewParentInput:SetSize(120, 30)
+    parentFrame.NewParentInput:SetPoint("TOPLEFT", parentFrame.ParentDropdown, "BOTTOMLEFT", 0, -5)
+    parentFrame.NewParentInput:SetAutoFocus(false)
+    parentFrame.NewParentInput:Hide()
+
+    -- Save New Parent on Enter
+    parentFrame.NewParentInput:SetScript("OnEnterPressed", function(self)
+        local newParent = self:GetText()
+        if newParent and newParent ~= "" then
+            _G.Campaigns[parentFrame.SelectedCampaign].Parent = newParent
+            CTCampaign:SaveCampaign()
+            UIDropDownMenu_SetText(parentFrame.ParentDropdown, newParent)
+        end
+        self:Hide()
+    end)
+end
+
+
+function CampaignManager:PopulateCampaignDetails(guid)
+    -- ✅ Ensure the campaign is loaded into memory
+    if not _G.Campaigns[guid] then
+        if _G.CampaignToolkitCampaignsDB[guid] then
+            _G.Campaigns[guid] = CopyTable(_G.CampaignToolkitCampaignsDB[guid])
+        else
+            print("|cffff0000Error: Campaign with GUID " .. guid .. " not found!|r")
+            return
+        end
+    end
+
+    local campaign = _G.Campaigns[guid]
+
+    -- ✅ Ensure the Campaign Details UI exists
     if not CampaignManagerFrame.Details then
-        -- Create a container for campaign details
+        -- Create a container frame for the campaign details tab
         CampaignManagerFrame.Details = CreateFrame("Frame", nil, CampaignManagerFrame.TabFrames[1])
         CampaignManagerFrame.Details:SetSize(780, 160)
         CampaignManagerFrame.Details:SetPoint("TOPLEFT", 10, -10)
 
-        -- Campaign Name EditBox Label
+        -- ✅ Restore **Campaign Name Input Box**
         CampaignManagerFrame.Details.NameEditLabel = CampaignManagerFrame.Details:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         CampaignManagerFrame.Details.NameEditLabel:SetPoint("TOPLEFT", CampaignManagerFrame.Details, "TOPLEFT", 60, 0)
-        CampaignManagerFrame.Details.NameEditLabel:SetText("Campaign Name")
+        CampaignManagerFrame.Details.NameEditLabel:SetText("Dataset Name")
 
-        -- Campaign Name EditBox
         CampaignManagerFrame.Details.NameEditBox = CreateFrame("EditBox", nil, CampaignManagerFrame.Details, "InputBoxTemplate")
-        CampaignManagerFrame.Details.NameEditBox:SetSize(300, 30)
+        CampaignManagerFrame.Details.NameEditBox:SetSize(180, 30)
         CampaignManagerFrame.Details.NameEditBox:SetPoint("TOPLEFT", 60, -10)
         CampaignManagerFrame.Details.NameEditBox:SetAutoFocus(false)
 
-        -- Campaign Icon Button
+        -- ✅ Restore **Campaign Parent Input Box**
+        CampaignManagerFrame.Details.ParentLabel = CampaignManagerFrame.Details:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        CampaignManagerFrame.Details.ParentLabel:SetPoint("TOPLEFT", CampaignManagerFrame.Details, "TOPLEFT", 280, 0)
+        CampaignManagerFrame.Details.ParentLabel:SetText("Campaign")
+
+        CampaignManagerFrame.Details.ParentBox = CreateFrame("EditBox", nil, CampaignManagerFrame.Details, "InputBoxTemplate")
+        CampaignManagerFrame.Details.ParentBox:SetSize(140, 30)
+        CampaignManagerFrame.Details.ParentBox:SetPoint("TOPLEFT", 280, -10)
+        CampaignManagerFrame.Details.ParentBox:SetAutoFocus(false)
+
+        -- ✅ Restore **Campaign Icon Button**
         CampaignManagerFrame.Details.IconButton = CreateFrame("Button", nil, CampaignManagerFrame.Details, "UIPanelButtonTemplate")
         CampaignManagerFrame.Details.IconButton:SetSize(40, 40)
         CampaignManagerFrame.Details.IconButton:SetPoint("TOPLEFT", CampaignManagerFrame.Details, "TOPLEFT", 10, 0)
 
-        -- Icon Texture inside the button
         CampaignManagerFrame.Details.Icon = CampaignManagerFrame.Details.IconButton:CreateTexture(nil, "ARTWORK")
         CampaignManagerFrame.Details.Icon:SetAllPoints(CampaignManagerFrame.Details.IconButton)
-        CampaignManagerFrame.Details.Icon:SetTexture(campaign.Icon) -- Default icon
 
-        -- Clickable function for changing the icon
-        CampaignManagerFrame.Details.IconButton:SetScript("OnClick", function()
-            StaticPopupDialogs["CHANGE_CAMPAIGN_ICON"] = {
-                text = "Enter the new icon path:",
-                button1 = "OK",
-                button2 = "Cancel",
-                hasEditBox = true,
-                OnAccept = function(self)
-                    local newIcon = self.editBox:GetText()
-                    _G.Campaigns[guid].Icon = string.format("interface/icons/%s", newIcon)
-                    CampaignManagerFrame.Details.Icon:SetTexture(_G.Campaigns[guid].Icon)
-                    CTCampaign:SaveCampaign(guid)
-                end,
-                EditBoxOnEnterPressed = function(self)
-                    local newIcon = self:GetParent().editBox:GetText()
-                    _G.Campaigns[guid].Icon = string.format("interface/icons/%s", newIcon)
-                    CampaignManagerFrame.Details.Icon:SetTexture(_G.Campaigns[guid].Icon)
-                    CTCampaign:SaveCampaign(guid)
-                    self:GetParent():Hide()
-                end,
-                timeout = 0,
-                whileDead = true,
-                hideOnEscape = true,
-            }
-            StaticPopup_Show("CHANGE_CAMPAIGN_ICON")
-        end)
-
-        -- Campaign Description Label
+        -- ✅ Restore **Campaign Description Box**
         CampaignManagerFrame.Details.DescriptionLabel = CampaignManagerFrame.Details:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         CampaignManagerFrame.Details.DescriptionLabel:SetPoint("TOPLEFT", CampaignManagerFrame.Details.IconButton, "BOTTOMLEFT", 0, -10)
         CampaignManagerFrame.Details.DescriptionLabel:SetText("Description:")
 
-        -- Scroll Frame for the Description Box
         CampaignManagerFrame.Details.DescriptionScroll = CreateFrame("ScrollFrame", nil, CampaignManagerFrame.Details, "UIPanelScrollFrameTemplate, BackdropTemplate")
         CampaignManagerFrame.Details.DescriptionScroll:SetSize(400, 90)
         CampaignManagerFrame.Details.DescriptionScroll:SetPoint("TOPLEFT", CampaignManagerFrame.Details.DescriptionLabel, "BOTTOMLEFT", 0, -5)
@@ -230,64 +293,127 @@ function CampaignManager:PopulateCampaignDetails(guid)
         })
         CampaignManagerFrame.Details.DescriptionScroll:SetBackdropColor(0, 0, 0, 0.8)
 
-        -- Editable Text Area
         CampaignManagerFrame.Details.DescriptionBox = CreateFrame("EditBox", nil, CampaignManagerFrame.Details.DescriptionScroll)
         CampaignManagerFrame.Details.DescriptionBox:SetMultiLine(true)
         CampaignManagerFrame.Details.DescriptionBox:SetFontObject(GameFontNormal)
-        CampaignManagerFrame.Details.DescriptionBox:SetWidth(390) -- Slightly smaller than ScrollFrame
+        CampaignManagerFrame.Details.DescriptionBox:SetWidth(390)
         CampaignManagerFrame.Details.DescriptionBox:SetAutoFocus(false)
         CampaignManagerFrame.Details.DescriptionBox:SetMaxLetters(1000)
         CampaignManagerFrame.Details.DescriptionBox:SetTextInsets(5, 5, 5, 5)
         CampaignManagerFrame.Details.DescriptionBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-        CampaignManagerFrame.Details.DescriptionBox:SetText(campaign.Description)
 
-        -- Assign EditBox to ScrollFrame
         CampaignManagerFrame.Details.DescriptionScroll:SetScrollChild(CampaignManagerFrame.Details.DescriptionBox)
 
-
-        -- Save Button
+        -- ✅ Restore **Save Button**
         CampaignManagerFrame.Details.SaveButton = CreateFrame("Button", nil, CampaignManagerFrame.Details, "UIPanelButtonTemplate")
         CampaignManagerFrame.Details.SaveButton:SetSize(100, 25)
         CampaignManagerFrame.Details.SaveButton:SetPoint("TOPLEFT", CampaignManagerFrame.Details, "BOTTOMLEFT", 10, 0)
         CampaignManagerFrame.Details.SaveButton:SetText("Save")
-        
-        -- Save function
+
+        -- ✅ Restore **Save Button Click Behavior**
         CampaignManagerFrame.Details.SaveButton:SetScript("OnClick", function()
-            local newName = CampaignManagerFrame.Details.NameEditBox:GetText()
-            local newDescription = CampaignManagerFrame.Details.DescriptionBox:GetText()
-            _G.Campaigns[guid].Name = newName
-            _G.Campaigns[guid].Description = newDescription
-            _G.Campaigns[guid].Author = UnitName("Player")
-            CampaignManagerFrame.CampaignName:SetText(newName)
-            CTCampaign:SaveCampaign(guid)
-            _G.UpdateCampaignList() -- Refresh list with updated name
+            campaign.Name = CampaignManagerFrame.Details.NameEditBox:GetText()
+            campaign.Description = CampaignManagerFrame.Details.DescriptionBox:GetText()
+            campaign.Parent = CampaignManagerFrame.Details.ParentBox:GetText()
+
+            -- ✅ Save to memory & database
+            _G.Campaigns[guid] = campaign
+            CTCampaign:SaveCampaign(guid, campaign)
+
+            -- ✅ Refresh campaign list UI
+            UpdateCampaignList()
         end)
+    end
 
-        CampaignManagerFrame.Details.SendButton = CreateFrame("Button", nil, CampaignManagerFrame.Details, "UIPanelButtonTemplate")
-        CampaignManagerFrame.Details.SendButton:SetSize(150, 25)
-        CampaignManagerFrame.Details.SendButton:SetPoint("TOPLEFT", CampaignManagerFrame.Details.SaveButton, "TOPLEFT", 100, 0)
-        CampaignManagerFrame.Details.SendButton:SetText("Send Campaign")
-        CampaignManagerFrame.Details.SendButton:Show() -- Hide by default
+    -- ✅ Populate the UI with campaign data
+    CampaignManagerFrame.CampaignName:SetText(campaign.Name)
+    CampaignManagerFrame.Details.NameEditBox:SetText(campaign.Name)
+    CampaignManagerFrame.Details.DescriptionBox:SetText(campaign.Description)
+    CampaignManagerFrame.Details.ParentBox:SetText(campaign.Parent or "None")
+    CampaignManagerFrame.Details.Icon:SetTexture(campaign.Icon)
 
-        CampaignManagerFrame.Details.SendButton:SetScript("OnClick", function()
-            if not UnitIsGroupLeader("player") then return end
+    -- ✅ Restore **Icon Button Click Behavior**
+    CampaignManagerFrame.Details.IconButton:SetScript("OnClick", function()
+        StaticPopupDialogs["CHANGE_CAMPAIGN_ICON"] = {
+            text = "Enter the new icon path:",
+            button1 = "OK",
+            button2 = "Cancel",
+            hasEditBox = true,
+            OnAccept = function(self)
+                local newIcon = "interface/icons/" .. self.editBox:GetText()
+                _G.Campaigns[guid].Icon = newIcon
+                CampaignManagerFrame.Details.Icon:SetTexture(newIcon)
+                CTCampaign:SaveCampaign(guid, _G.Campaigns[guid])
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+        }
+        StaticPopup_Show("CHANGE_CAMPAIGN_ICON")
+    end)
 
-            CampaignManager:SendCampaign(guid)
-        end)
+    CampaignManagerFrame.Details.SendButton = CreateFrame("Button", nil, CampaignManagerFrame.Details, "UIPanelButtonTemplate")
+    CampaignManagerFrame.Details.SendButton:SetSize(150, 25)
+    CampaignManagerFrame.Details.SendButton:SetPoint("TOPLEFT", CampaignManagerFrame.Details.SaveButton, "TOPLEFT", 100, 0)
+    CampaignManagerFrame.Details.SendButton:SetText("Send to Group")
+    CampaignManagerFrame.Details.SendButton:Show() -- Hide by default
 
-        -- Function to update button visibility
-        local function UpdateSendCampaignButton()
-            if UnitIsGroupLeader("player") then
-                CampaignManagerFrame.Details.SendButton:Show()
-            else
-                CampaignManagerFrame.Details.SendButton:Hide()
-            end
+    CampaignManagerFrame.Details.SendButton:SetScript("OnClick", function()
+        if not UnitIsGroupLeader("player") then return end
+
+        -- Get the currently selected campaign
+        local guid = CampaignManagerFrame.SelectedCampaign
+        if not guid or not _G.Campaigns[guid] then
+            print("|cffff0000Error: No campaign is currently open to send.|r")
+            return
+        end
+
+        -- Send the campaign to the target
+        CampaignManager:SendCampaignToGroup(guid)
+    end)
+
+    -- Function to update button visibility
+    local function UpdateSendCampaignButton()
+        if UnitIsGroupLeader("player") then
+            CampaignManagerFrame.Details.SendButton:Show()
+        else
+            CampaignManagerFrame.Details.SendButton:Hide()
         end
     end
 
-    -- Populate the edit box with the campaign name
-    CampaignManagerFrame.Details.NameEditBox:SetText(campaign.Name)
+    -- Create "Send to Target" Button
+    CampaignManagerFrame.Details.SendTargetButton = CreateFrame("Button", nil, CampaignManagerFrame.Details, "UIPanelButtonTemplate")
+    CampaignManagerFrame.Details.SendTargetButton:SetSize(150, 25)
+    CampaignManagerFrame.Details.SendTargetButton:SetPoint("TOPLEFT", CampaignManagerFrame.Details.SendButton, "TOPRIGHT", 0, 0)
+    CampaignManagerFrame.Details.SendTargetButton:SetText("Send to Target")
+    CampaignManagerFrame.Details.SendTargetButton:Show() -- Hide by default
+
+    -- Fix: Ensure it grabs the correct campaign GUID when clicked
+    CampaignManagerFrame.Details.SendTargetButton:SetScript("OnClick", function()
+        if not UnitIsGroupLeader("player") then return end
+
+        -- Get the currently selected campaign
+        local guid = CampaignManagerFrame.SelectedCampaign
+        if not guid or not _G.Campaigns[guid] then
+            print("|cffff0000Error: No campaign is currently open to send.|r")
+            return
+        end
+
+        -- Send the campaign to the target
+        CampaignManager:SendCampaignToTarget(guid)
+    end)
+
+    -- Function to update button visibility
+    local function UpdateSendToTargetCampaignButton()
+        if UnitIsGroupLeader("player") then
+            CampaignManagerFrame.Details.SendTargetButton:Show()
+        else
+            CampaignManagerFrame.Details.SendTargetButton:Hide()
+        end
+    end
 end
+
+
 
 --== SPELL EDITOR ==--
 function CampaignManager:CreateSpellFrame(parentFrame)
@@ -356,7 +482,7 @@ function CampaignManager:CreateSpellFrame(parentFrame)
                         DiceToDamage = "",
                         HitModifiers = {},
                         DamageModifiers = {},
-                        CritModifiers = {},
+                        CritModifier = "",
                         Icon = "Interface/ICONS/INV_Misc_QuestionMark"
                     }
                     CampaignManager:AddSpellWindow(newSpell)
@@ -374,27 +500,23 @@ function CampaignManager:CreateSpellFrame(parentFrame)
 end
 
 function CampaignManager:RemoveSpellFromCampaign(guid, spellGuid)
-    -- print("Attempting to remove spell from campaign...")
     local campaign = _G.Campaigns[guid]
     if not campaign then return end
 
-    -- print("... found campaign")
-
-
+    -- ✅ Find and remove the spell
     for index, spell in ipairs(campaign.SpellList) do
         if spell.Guid == spellGuid then
-            -- print("Removing " ..spell.Name)
             table.remove(campaign.SpellList, index)
-            CTCampaign:SaveCampaign(guid) -- Save changes
+            CTCampaign:SaveCampaign(guid, campaign) -- Save changes
             return
         end
     end
 end
 
+
 function CampaignManager:PopulateCampaignSpellList(guid)
     local campaign = _G.Campaigns[guid] -- Retrieve the loaded campaign
     if not campaign then return end
-
 
     -- Ensure the 'Spells' tab UI exists
     if not CampaignManagerFrame.Spells then
@@ -404,22 +526,22 @@ function CampaignManager:PopulateCampaignSpellList(guid)
 
         CampaignManagerFrame.Spells.SelectedCampaign = guid
 
-        -- Spell List Label
+        -- ✅ Restore **Spell List Header**
         CampaignManagerFrame.Spells.NameEditLabel = CampaignManagerFrame.Spells:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         CampaignManagerFrame.Spells.NameEditLabel:SetPoint("TOPLEFT", CampaignManagerFrame.Spells, "TOPLEFT", 10, 0)
         CampaignManagerFrame.Spells.NameEditLabel:SetText("Spell List")
 
-        -- Create the Spell Grid
+        -- ✅ Restore **Spell Grid Layout**
         CampaignManager:CreateSpellFrame(CampaignManagerFrame.Spells)
     end
 
-    -- Clear all existing spell slots
+    -- ✅ Clear all existing spell slots before updating
     for _, slot in ipairs(CampaignManagerFrame.Spells.SpellSlots) do
-        slot.icon:Hide()
-        slot.spell = nil
+        slot.icon:Hide() -- Hide old spell icons
+        slot.spell = nil  -- Clear old spell data
     end
 
-    -- Populate slots with spells
+    -- ✅ Populate slots with spells
     for i, spell in ipairs(campaign.SpellList or {}) do
         local slot = CampaignManagerFrame.Spells.SpellSlots[i]
         if slot then
@@ -429,6 +551,92 @@ function CampaignManager:PopulateCampaignSpellList(guid)
         end
     end
 end
+
+function CampaignManager:CreateSpellFrame(parentFrame)
+    parentFrame.SpellList = CreateFrame("Frame", nil, parentFrame, "BackdropTemplate")
+    parentFrame.SpellList:SetSize(750, 320)
+    parentFrame.SpellList:SetPoint("TOPLEFT", parentFrame, "TOPLEFT", 10, 0)
+
+    -- ✅ Restore **Grid Layout for Spell Slots**
+    local SLOT_SIZE, SLOT_PADDING, COLUMNS, ROWS = 48, -16, 14, 5
+    local TOTAL_SLOTS = COLUMNS * ROWS
+    local startX, startY = 10, -20
+
+    parentFrame.SpellSlots = {}
+
+    -- ✅ Create Empty **Spell Slots**
+    for i = 1, TOTAL_SLOTS do
+        local slot = CreateFrame("Button", nil, parentFrame.SpellList, "BackdropTemplate")
+        slot:SetSize(SLOT_SIZE, SLOT_SIZE)
+
+        -- ✅ Position the slot in a **grid format**
+        local row, col = math.floor((i - 1) / COLUMNS), (i - 1) % COLUMNS
+        slot:SetPoint("TOPLEFT", parentFrame.SpellList, "TOPLEFT", startX + (col * (SLOT_SIZE + SLOT_PADDING)), startY - (row * (SLOT_SIZE + SLOT_PADDING)))
+
+        -- ✅ Restore **Blizzard-style Empty Slot Background**
+        slot.texture = slot:CreateTexture(nil, "BACKGROUND")
+        slot.texture:SetAllPoints(slot)
+        slot.texture:SetTexture("Interface\\Buttons\\UI-EmptySlot")
+
+        -- ✅ Restore **Spell Icon Placeholder**
+        slot.icon = slot:CreateTexture(nil, "ARTWORK")
+        slot.icon:SetSize(SLOT_SIZE - 24, SLOT_SIZE - 24)
+        slot.icon:SetPoint("CENTER", slot, "CENTER", 0, 0)
+        slot.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        slot.icon:Hide() -- Hide icon initially
+
+        slot.spell = nil -- No spell assigned initially
+
+        -- ✅ Restore **Tooltip Behavior**
+        slot:SetScript("OnEnter", function(self)
+            if self.spell then
+                CTSpell:ShowTooltip(self.spell, self)  -- Use the tooltip from CTSpell.lua
+            end
+        end)
+        slot:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+
+        -- ✅ Restore **Left-Click to Edit Spell**
+        slot:SetScript("OnMouseDown", function(self, button)
+            if button == "LeftButton" then
+                if self.spell then
+                    CampaignManager:AddSpellWindow(self.spell) -- Edit existing spell
+                else
+                    -- Open spell creation window with default values
+                    local newSpell = {
+                        Name = "New Spell",
+                        Description = "",
+                        Type = "General",
+                        Class = "General",
+                        Specialisation = "General",
+                        ActionCost = "None",
+                        Message = "",
+                        ManaCost = 0,
+                        DiceToHit = "",
+                        DiceToDamage = "",
+                        HitModifiers = {},
+                        DamageModifiers = {},
+                        CritModifier = "",
+                        Icon = "Interface/ICONS/INV_Misc_QuestionMark"
+                    }
+                    CampaignManager:AddSpellWindow(newSpell)
+                end
+            elseif button == "RightButton" and self.spell then
+                -- ✅ Right-Click removes spell
+                CampaignManager:RemoveSpellFromCampaign(parentFrame.SelectedCampaign, self.spell.Guid)
+                CampaignManager:PopulateCampaignSpellList(parentFrame.SelectedCampaign) -- Refresh UI
+            end
+        end)
+
+        -- ✅ Store slot reference
+        table.insert(parentFrame.SpellSlots, slot)
+    end
+end
+
+
+
+
 
 function CampaignManager:AddSpellWindow(spell)
     -- Prevent duplicate windows
@@ -631,7 +839,7 @@ function CampaignManager:AddSpellWindow(spell)
     self.AddSpellFrame.ActionCostDropdown = CreateFrame("Frame", "ActionCostDropdown", self.AddSpellFrame, "UIDropDownMenuTemplate")
     self.AddSpellFrame.ActionCostDropdown:SetPoint("TOPLEFT", self.AddSpellFrame.ActionCostLabel, "TOPLEFT", 100, 5)
 
-    local actionCosts = { "Action", "Bonus Action", "Reaction", "Free Action" }
+    local actionCosts = { "Action", "Bonus Action", "Reaction", "Free Action", "Haste Attack" }
     local actionDropdown = self.AddSpellFrame.ActionCostDropdown
     local function OnActionCostSelected(self, value)
         spell.ActionCost = value
@@ -691,7 +899,7 @@ function CampaignManager:AddSpellWindow(spell)
     self.AddSpellFrame.TypeDropdown = CreateFrame("Frame", "TypeDropdown", self.AddSpellFrame, "UIDropDownMenuTemplate")
     self.AddSpellFrame.TypeDropdown:SetPoint("TOPLEFT", self.AddSpellFrame.TypeLabel, "TOPLEFT", 100, 5)
 
-    local types = { "General", "Statistic", "WeaponDamage", "SpellDamage", "HealTarget", "HealSelf", "Script" }
+    local types = { "General", "Statistic", "SpellDamage", "HealTarget", "HealSelf", "Aura_NoTick", "Aura_Tick" }
     local actionDropdown = self.AddSpellFrame.TypeDropdown
     local function OnTypeSelected(self, value)
         spell.Type = value
@@ -817,7 +1025,8 @@ function CampaignManager:AddSpellWindow(spell)
         "OFF_HAND", 
         "TARGET_ENEMY", 
         "TARGET_ALLY", 
-        "NOT_SELF" 
+        "NOT_SELF",
+        "SELF"
     }
 
     local requiresDropdown = CreateFrame("Frame", "RequiresDropdown", self.AddSpellFrame, "UIDropDownMenuTemplate")
@@ -921,7 +1130,7 @@ function CampaignManager:AddSpellWindow(spell)
 
         spell.HitModifiers = ConvertModifiers(spell.HitModifiers)
         spell.DamageModifiers = ConvertModifiers(spell.DamageModifiers)
-        spell.CritModifiers = ConvertModifiers(spell.CritModifiers)
+        spell.CritModifier = spell.CritModifier or ""
 
         spell.Name = self.AddSpellFrame.SpellNameBox:GetText()
         spell.Description = self.AddSpellFrame.SpellDescriptionBox:GetText()
@@ -960,7 +1169,12 @@ function CampaignManager:AddSpellWindow(spell)
         end
 
         -- Save changes and refresh UI
-        CTCampaign:SaveCampaign(CampaignManager.SelectedCampaign)
+        local campaign = _G.Campaigns[CampaignManager.SelectedCampaign]
+        if campaign then
+            CTCampaign:SaveCampaign(CampaignManager.SelectedCampaign, campaign)
+        else
+            print("|cffff0000Error: Attempted to save a campaign that does not exist in memory.|r")
+        end
         CampaignManager:PopulateCampaignSpellList(CampaignManager.SelectedCampaign)
 
         -- Close the spell creation window
@@ -970,6 +1184,8 @@ function CampaignManager:AddSpellWindow(spell)
     -- Show the window
     self.AddSpellFrame:Show()
 end
+
+
 
 function CampaignManager:CreateMultiSelectDropdown(parent, label, point, selectedValues, categories, onSelect, offset)
     -- Label
@@ -1136,11 +1352,48 @@ function CampaignManager:UpdateSpellTypeFields(spell)
             function(selectedValues) spell.DamageModifiers = selectedValues end, -50)
         table.insert(self.AddSpellFrame.DynamicFields, self.AddSpellFrame.DamageModifiersDropdown)
 
-        -- Crit modifier dropdown.
-        self.AddSpellFrame.CritModifiersDropdown = self:CreateMultiSelectDropdown(
-            self.AddSpellFrame, "Crit Modifiers", lastElement, spell.CritModifiers or {}, modifierCategories,
-            function(selectedValues) spell.CritModifiers = selectedValues end, -80)
+        -- Crit Modifier Label
+        local critLabel = self.AddSpellFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        critLabel:SetPoint("TOPLEFT", lastElement, "BOTTOMLEFT", 0, -80)
+        critLabel:SetText("Crit Modifier")
+        table.insert(self.AddSpellFrame.DynamicFields, critLabel)
+
+        -- Crit Modifier Dropdown
+        self.AddSpellFrame.CritModifiersDropdown = CreateFrame("Frame", "CritModifiersDropdown", self.AddSpellFrame, "UIDropDownMenuTemplate")
+        self.AddSpellFrame.CritModifiersDropdown:SetPoint("TOPLEFT", critLabel, "TOPLEFT", 100, 5)
         table.insert(self.AddSpellFrame.DynamicFields, self.AddSpellFrame.CritModifiersDropdown)
+
+        local critModifiers = {
+            "Melee Critical Strike", "Ranged Critical Strike", "Spell Critical Strike",
+            "Fire Critical Strike", "Frost Critical Strike", "Nature Critical Strike",
+            "Arcane Critical Strike", "Fel Critical Strike", "Holy Critical Strike",
+            "Shadow Critical Strike", "Healing Critical Strike",
+            "Critical Dodge", "Critical Parry", "Critical Block"
+        }
+
+        local function OnCritModifierSelected(self, value)
+            -- Ensure AddSpellFrame exists before modifying UI
+            if not CampaignManager.AddSpellFrame then
+                print("|cffff0000Error: Spell Editor is not open. Cannot set Crit Modifier.|r")
+                return
+            end
+
+            -- Update spell data
+            spell.CritModifier = value
+            UIDropDownMenu_SetText(CampaignManager.AddSpellFrame.CritModifiersDropdown, value)
+        end
+
+
+        UIDropDownMenu_Initialize(CampaignManager.AddSpellFrame.CritModifiersDropdown, function(_, level, _)
+            for _, critType in ipairs(critModifiers) do
+                local info = UIDropDownMenu_CreateInfo()
+                info.text = critType
+                info.func = function() OnCritModifierSelected(self, critType) end
+                UIDropDownMenu_AddButton(info)
+            end
+        end)
+
+        UIDropDownMenu_SetText(self.AddSpellFrame.CritModifiersDropdown, spell.CritModifier or "None")
     elseif spellType == "WeaponDamage" then
         spell.DiceToHit = "1d20"
 
@@ -1160,10 +1413,23 @@ function CampaignManager:UpdateSpellTypeFields(spell)
 
         -- Crit modifier dropdown.
         self.AddSpellFrame.CritModifiersDropdown = self:CreateMultiSelectDropdown(
-            self.AddSpellFrame, "Crit Modifiers", lastElement, spell.CritModifiers or {}, modifierCategories,
-            function(selectedValues) spell.CritModifiers = selectedValues end, -80)
+            self.AddSpellFrame, "Crit Modifiers", lastElement, spell.CritModifier or {}, modifierCategories,
+            function(selectedValues) spell.CritModifier = selectedValues end, -80)
         table.insert(self.AddSpellFrame.DynamicFields, self.AddSpellFrame.CritModifiersDropdown)
+    elseif spellType == "HealTarget" then
+        spell.DiceToHit = "1d20"
 
+        self.AddSpellFrame.DiceToDamageBox = CreateInputField("Healing Dice", spell.DiceToDamage, 100)
+        self.AddSpellFrame.DiceToDamageBox:SetText(spell.DiceToDamage or "1d8")
+        self.AddSpellFrame.DiceToDamageBox:SetSize(60, 20)
+
+        -- Damagge modifier dropdown.
+        self.AddSpellFrame.DamageModifiersDropdown = self:CreateMultiSelectDropdown(
+            self.AddSpellFrame, "Healing Modifiers", lastElement, spell.DamageModifiers or {}, modifierCategories,
+            function(selectedValues) spell.DamageModifiers = selectedValues end, -20)
+        table.insert(self.AddSpellFrame.DynamicFields, self.AddSpellFrame.DamageModifiersDropdown)
+
+        spell.CritModifier = "Heal.crit"
     elseif spell.Type == "Statistic" then
         -- Automatically set the dice to roll to 1d20.
         spell.DiceToHit = "1d20"
@@ -1240,6 +1506,7 @@ function CampaignManager:CreateAuraFrame(parentFrame)
                         Type = "Buff",
                         Icon = "Interface/ICONS/INV_Misc_QuestionMark",
                         TriggerOn = "Tick",
+                        ApplyTo = "Target",
                         RemainingTurns = "3",
                         Effects = {}
                     }
@@ -1466,7 +1733,7 @@ function CampaignManager:AddAuraWindow(aura)
     self.AddAuraFrame.TriggerOnDropdown = CreateFrame("Frame", "TriggerOnDropdown", self.AddAuraFrame, "UIDropDownMenuTemplate")
     self.AddAuraFrame.TriggerOnDropdown:SetPoint("TOPLEFT", self.AddAuraFrame.TriggerOnLabel, "TOPLEFT", 100, 5)
 
-    local triggerons = { "Tick", "HitTarget", "CritTarget", "HealTarget", "HitSelf", "CritSelf", "HealSelf", "OnDeath" }
+    local triggerons = { "Tick", "OnEnemyHit", "OnHitTaken"  }
     local actionDropdown = self.AddAuraFrame.TriggerOnDropdown
     local function OnTriggerOnSelected(self, value)
         aura.TriggerOn = value
@@ -1485,9 +1752,39 @@ function CampaignManager:AddAuraWindow(aura)
 
     UIDropDownMenu_SetText(self.AddAuraFrame.TriggerOnDropdown, aura.TriggerOn or "None")
 
+        -- Aura ApplyTo
+    -- Aura ApplyTo Label
+    self.AddAuraFrame.ApplyToLabel = self.AddAuraFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    self.AddAuraFrame.ApplyToLabel:SetPoint("TOPLEFT", self.AddAuraFrame.TriggerOnLabel, "BOTTOMLEFT", 0, -20)
+    self.AddAuraFrame.ApplyToLabel:SetText("Apply to")
+
+    local selectedApplyTo = aura.ApplyTo
+
+    self.AddAuraFrame.ApplyToDropdown = CreateFrame("Frame", "ApplyToDropdown", self.AddAuraFrame, "UIDropDownMenuTemplate")
+    self.AddAuraFrame.ApplyToDropdown:SetPoint("TOPLEFT", self.AddAuraFrame.ApplyToLabel, "TOPLEFT", 100, 5)
+
+    local applytos = { "Target", "Caster" }
+    local actionDropdown = self.AddAuraFrame.ApplyToDropdown
+    local function OnApplyToSelected(self, value)
+        aura.ApplyTo = value
+        selectedApplyTo = value
+        UIDropDownMenu_SetText(actionDropdown, value)
+    end
+
+    UIDropDownMenu_Initialize(self.AddAuraFrame.ApplyToDropdown, function(self, level, menuList)
+        for _, cost in ipairs(applytos) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = cost
+            info.func = function() OnApplyToSelected(self, cost) end
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+
+    UIDropDownMenu_SetText(self.AddAuraFrame.ApplyToDropdown, aura.ApplyTo or "Target")
+
     -- Aura Duration Label
     self.AddAuraFrame.AuraDurationLabel = self.AddAuraFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    self.AddAuraFrame.AuraDurationLabel:SetPoint("TOPLEFT", self.AddAuraFrame.TriggerOnLabel, "TOPLEFT", 0, -30)
+    self.AddAuraFrame.AuraDurationLabel:SetPoint("TOPLEFT", self.AddAuraFrame.ApplyToLabel, "TOPLEFT", 0, -30)
     self.AddAuraFrame.AuraDurationLabel:SetText("Duration")
 
     -- Aura Duration EditBox
@@ -1504,7 +1801,7 @@ function CampaignManager:AddAuraWindow(aura)
 
     -- Scroll Frame for Effects List
     self.AddAuraFrame.EffectsScrollFrame = CreateFrame("ScrollFrame", nil, self.AddAuraFrame, "UIPanelScrollFrameTemplate")
-    self.AddAuraFrame.EffectsScrollFrame:SetSize(340, 240)
+    self.AddAuraFrame.EffectsScrollFrame:SetSize(340, 210)
     self.AddAuraFrame.EffectsScrollFrame:SetPoint("TOPLEFT", self.AddAuraFrame.EffectsLabel, "BOTTOMLEFT", 0, -5)
 
     -- Child Frame for Scroll
@@ -1548,22 +1845,46 @@ function CampaignManager:AddAuraWindow(aura)
             local effectTypeDropdown = CreateFrame("Frame", nil, entry, "UIDropDownMenuTemplate")
             effectTypeDropdown:SetPoint("TOPLEFT", effectTypeLabel, "TOPLEFT", 0, -20)
 
-            local effectTypes = { "None", "Damage_Tick", "Healing_Tick", "Stat Modifier", "Script" }
-            local function OnEffectTypeSelected(self, value)
+            local effectTypes = {
+                ["None"] = {},
+                ["DamageTarget"] = {},
+                ["HealTarget"] = {},
+                ["HealCaster"] = {},
+                ["Conditions"] = { "Stun", "Incapacitate" }
+            }
+
+            local function OnEffectTypeSelected(value)
                 effect.Type = value
                 UIDropDownMenu_SetText(effectTypeDropdown, value)
                 RefreshEffectsList()
             end
 
             UIDropDownMenu_Initialize(effectTypeDropdown, function(self, level, menuList)
-                for _, effectType in ipairs(effectTypes) do
-                    local info = UIDropDownMenu_CreateInfo()
-                    info.text = effectType
-                    info.func = function() OnEffectTypeSelected(self, effectType) end
-                    UIDropDownMenu_AddButton(info)
+                if level == 1 then
+                    for effectType, subtypes in pairs(effectTypes) do
+                        local info = UIDropDownMenu_CreateInfo()
+                        info.text = effectType
+                        info.notCheckable = true
+                        if #subtypes > 0 then
+                            info.hasArrow = true
+                            info.menuList = effectType
+                        else
+                            info.func = function() OnEffectTypeSelected(effectType) end
+                        end
+                        UIDropDownMenu_AddButton(info, level)
+                    end
+                elseif menuList then
+                    for _, subtype in ipairs(effectTypes[menuList]) do
+                        local info = UIDropDownMenu_CreateInfo()
+                        info.text = subtype
+                        info.func = function() OnEffectTypeSelected(subtype) end
+                        UIDropDownMenu_AddButton(info, level)
+                    end
                 end
             end)
+
             UIDropDownMenu_SetText(effectTypeDropdown, effect.Type or "None")
+
 
             -- Value Label (Now Properly Aligned)
             local valueLabel = entry:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1609,7 +1930,7 @@ function CampaignManager:AddAuraWindow(aura)
 
             UIDropDownMenu_SetText(schoolDropdown, effect.School or "None")
 
-            if effect.Type == "Damage_Tick" then
+            if effect.Type == "DamageTarget" then
                 schoolDropdown:Show()
                 schoolLabel:Show()
             end
@@ -1652,7 +1973,6 @@ function CampaignManager:AddAuraWindow(aura)
 
             -- **Set Initial Text for Dropdown**
             UIDropDownMenu_SetText(conditionDropdown, GetAuraNameFromGUID(effect.Condition))
-            print(GetAuraNameFromGUID(effect.Condition))
 
             -- Initialize Dropdown
             UIDropDownMenu_Initialize(conditionDropdown, function(self, level, menuList)
@@ -1733,10 +2053,6 @@ function CampaignManager:AddAuraWindow(aura)
         end
     end
 
-
-
-
-
     -- Add Effect Button
     self.AddAuraFrame.AddEffectButton = CreateFrame("Button", nil, self.AddAuraFrame, "UIPanelButtonTemplate")
     self.AddAuraFrame.AddEffectButton:SetSize(100, 20)
@@ -1812,7 +2128,12 @@ function CampaignManager:AddAuraWindow(aura)
         end
 
         -- Save changes and refresh UI
-        CTCampaign:SaveCampaign(CampaignManager.SelectedCampaign)
+        local campaign = _G.Campaigns[CampaignManager.SelectedCampaign]
+        if campaign then
+            CTCampaign:SaveCampaign(CampaignManager.SelectedCampaign, campaign)
+        else
+            print("|cffff0000Error: Attempted to save a campaign that does not exist in memory.|r")
+        end
         CampaignManager:PopulateCampaignAuraList(CampaignManager.SelectedCampaign)
 
         -- Close the aura creation window
@@ -1832,80 +2153,214 @@ CampaignManagerFrame:SetScript("OnShow", function()
     SwitchTab(1)
 end)
 
--- Function to update the list of campaigns in the scroll frame
+local function CreateNewCampaign()
+    -- Generate a unique campaign GUID and set up initial campaign data
+    local campaignData = {
+        Name = "New Dataset",
+        Description = "Enter description here.",
+        Author = UnitName("player"),
+        LastUpdated = GetServerTime(),
+        Icon = "Interface/ICONS/INV_Misc_QuestionMark",
+        Parent = "Miscellaneous",
+        SpellList = {},
+        AuraList = {}
+    }
+
+    -- Save the campaign properly using SetData, which assigns a GUID
+    CTCampaign:SetData(campaignData)
+
+    -- Retrieve the assigned GUID
+    local guid = campaignData.Guid
+
+    -- Manually load the new campaign so it is available in _G.Campaigns
+    CTCampaign:LoadCampaign(guid)
+
+    -- Refresh the campaign list
+    UpdateCampaignList()
+
+    -- Ensure the new campaign is selected and displayed
+    CampaignManagerFrame.SelectedCampaign = guid
+    CampaignManagerFrame.CampaignName:SetText(campaignData.Name)
+    SwitchTab(1)
+    CampaignManager:PopulateCampaignDetails(guid)
+end
+
+local function RemoveCampaign(guid)
+    if not _G.CampaignToolkitCampaignsDB[guid] then
+        print("|cffff0000Error: Campaign not found.|r")
+        return
+    end
+
+    -- Show confirmation popup
+    StaticPopupDialogs["REMOVE_CAMPAIGN"] = {
+        text = "Are you sure you want to delete this campaign?\n\nThis action cannot be undone.",
+        button1 = "Yes",
+        button2 = "No",
+        OnAccept = function()
+            -- Remove from memory and database
+            _G.CampaignToolkitCampaignsDB[guid] = nil
+            _G.Campaigns[guid] = nil
+
+            -- Refresh campaign list
+            UpdateCampaignList()
+            print("|cff00ff00Campaign deleted successfully.|r")
+        end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+    }
+    StaticPopup_Show("REMOVE_CAMPAIGN")
+end
+
+
+
+
+local function CreateNewCampaign()
+    local guid = string.format("G%d-%d", time() % 100000, math.random(1000, 9999))
+
+    -- Create campaign object
+    local newCampaign = {
+        Name = "New Dataset",
+        Guid = guid,
+        Description = "Enter description here.",
+        Author = UnitName("player"),
+        Icon = "Interface/ICONS/INV_Misc_QuestionMark",
+        Parent = "Miscellaneous",
+        SpellList = {},
+        AuraList = {}
+    }
+
+    -- Store in memory & database
+    _G.Campaigns[guid] = newCampaign
+    _G.CampaignToolkitCampaignsDB[guid] = CopyTable(newCampaign)
+
+    -- Save and refresh UI
+    CTCampaign:SaveCampaign(guid, newCampaign)
+    UpdateCampaignList()
+    CampaignManager:PopulateCampaignDetails(guid)
+end
+
+
 local function UpdateCampaignList()
-    local campaigns = CTCampaign:GetSavedCampaigns()
-    
-    -- Ensure previous entries are removed
+    -- ✅ Load campaigns from database into memory first
+    for guid, campaignData in pairs(_G.CampaignToolkitCampaignsDB) do
+        if not _G.Campaigns[guid] then
+            _G.Campaigns[guid] = CopyTable(campaignData)
+        end
+    end
+
+    -- ✅ Clear old UI entries
     if CampaignListScrollChild.entries then
         for _, entry in ipairs(CampaignListScrollChild.entries) do
             entry:Hide()
             entry:SetParent(nil)
         end
     end
-
-    -- Create an entry for each loaded campaign
     CampaignListScrollChild.entries = {}
-    for index, guid in ipairs(campaigns) do
-        local campaign = _G.CampaignToolkitCampaignsDB[guid]
-        local entry = CreateFrame("Frame", nil, CampaignListScrollChild, "BackdropTemplate")
-        entry:SetWidth(180)
-        entry:SetPoint("TOP", CampaignListScrollChild, "TOP", 0, -((index - 1) * 30))
 
-        -- Background texture
-        local bg = entry:CreateTexture(nil, "BACKGROUND")
-        bg:SetAllPoints(entry)
-        bg:SetColorTexture(0.1, 0.1, 0.1, 0) -- Dark background
-    
-        -- Highlight on mouseover
-        entry:SetScript("OnEnter", function()
-            bg:SetColorTexture(0.2, 0.2, 0.2, 0.8)
-        end)
-        entry:SetScript("OnLeave", function()
-            bg:SetColorTexture(0.1, 0.1, 0.1, 0)
-        end)
+    local groupedCampaigns = {}
 
-        -- Icon for campaign
-        local icon = entry:CreateTexture(nil, "ARTWORK")
-        icon:SetSize(20, 20)
-        icon:SetPoint("TOPLEFT", entry, "TOPLEFT", 5, -5)
-        icon:SetTexture(campaign.Icon) -- Example icon, customize as needed
-
-        -- Campaign Name Text
-        local nameText = entry:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        nameText:SetPoint("TOPLEFT", icon, "TOPRIGHT", 5, 0)
-        nameText:SetWidth(150) -- Set a fixed width for wrapping
-        nameText:SetJustifyH("LEFT")
-        nameText:SetJustifyV("TOP")
-        nameText:SetWordWrap(true)
-        nameText:SetText(campaign.Name)
-
-        -- Dynamically adjust the entry height based on text size
-        local textHeight = nameText:GetStringHeight()
-        local entryHeight = math.max(25, textHeight + 10) -- Ensure minimum height
-        entry:SetHeight(entryHeight)
-
-        -- Adjust icon alignment if entry is taller
-        icon:SetPoint("TOPLEFT", entry, "TOPLEFT", 5, -((entryHeight - 20) / 2))
-
-        -- Click action (select campaign)
-        entry:SetScript("OnMouseUp", function()
-            CampaignManagerFrame.CampaignName:SetText(campaign.Name)
-
-            -- Store the selected campaign GUID for editing
-            CampaignManagerFrame.SelectedCampaign = guid
-
-            -- Switch to the 'Details' tab
-            SwitchTab(1)
-
-            -- Populate the details tab with campaign data
-            CampaignManager:PopulateCampaignDetails(guid)
-        end)
-
-        -- Store entry for future reference
-        table.insert(CampaignListScrollChild.entries, entry)
+    -- ✅ Group campaigns by their "Parent" category
+    for guid, campaign in pairs(_G.Campaigns) do
+        local parent = campaign.Parent or "Miscellaneous"
+        if not groupedCampaigns[parent] then
+            groupedCampaigns[parent] = {}
+        end
+        table.insert(groupedCampaigns[parent], { guid = guid, campaign = campaign })
     end
+
+    local yOffset = 0
+
+    -- ✅ Iterate over campaign categories & create UI elements
+    for parent, campaignList in pairs(groupedCampaigns) do
+        -- ✅ Restore **CATEGORY HEADERS** with dividers
+        local header = CampaignListScrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        header:SetPoint("TOP", CampaignListScrollChild, "TOP", 0, yOffset)
+        header:SetText(parent)
+        table.insert(CampaignListScrollChild.entries, header)
+
+        yOffset = yOffset - 20  -- Space for category title
+
+        -- Divider Line
+        local divider = CampaignListScrollChild:CreateTexture(nil, "ARTWORK")
+        divider:SetSize(200, 1) -- Divider width
+        divider:SetPoint("TOP", CampaignListScrollChild, "TOP", 0, yOffset - 5)
+        divider:SetColorTexture(1, 1, 1, 0.2) -- Light white transparency
+        table.insert(CampaignListScrollChild.entries, divider)
+
+        yOffset = yOffset - 15  -- Space for divider
+
+        -- ✅ Restore **CAMPAIGN ENTRY BUTTONS** with interactive background
+        for _, data in ipairs(campaignList) do
+            local campaign = data.campaign
+            local guid = data.guid
+
+            -- ✅ Create a full **frame entry** for better click behavior
+            local entry = CreateFrame("Frame", nil, CampaignListScrollChild, "BackdropTemplate")
+            entry:SetSize(180, 30) -- Restore original button size
+            entry:SetPoint("TOP", CampaignListScrollChild, "TOP", 0, yOffset)
+
+            -- ✅ **Restore Blizzard-Style Interactive Background**
+            local bg = entry:CreateTexture(nil, "BACKGROUND")
+            bg:SetAllPoints(entry)
+            bg:SetColorTexture(0.1, 0.1, 0.1, 0) -- Light gray transparent background
+
+            entry:SetScript("OnEnter", function()
+                bg:SetColorTexture(0.2, 0.2, 0.2, 0.8) -- Darker on hover
+            end)
+            entry:SetScript("OnLeave", function()
+                bg:SetColorTexture(0.1, 0.1, 0.1, 0) -- Restore on leave
+            end)
+
+            -- ✅ Restore **ICON ALIGNMENT** with proper Blizzard-style spacing
+            local icon = entry:CreateTexture(nil, "ARTWORK")
+            icon:SetSize(20, 20)
+            icon:SetPoint("TOPLEFT", entry, "TOPLEFT", 5, -5)
+            icon:SetTexture(campaign.Icon)
+
+            -- ✅ Restore **TEXT ALIGNMENT & APPEARANCE**
+            local nameText = entry:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            nameText:SetPoint("LEFT", icon, "RIGHT", 5, 0)
+            nameText:SetWidth(150)
+            nameText:SetJustifyH("LEFT")
+            nameText:SetText(campaign.Name)
+
+            -- ✅ Restore **Click Behavior**
+            entry:SetScript("OnMouseUp", function(_, button)
+                if button == "LeftButton" then
+                    -- Select campaign
+                    CampaignManagerFrame.CampaignName:SetText(campaign.Name)
+                    CampaignManagerFrame.SelectedCampaign = guid
+                    SwitchTab(1) -- Ensure correct tab is open
+                    CampaignManager:PopulateCampaignDetails(guid)
+                elseif button == "RightButton" then
+                    -- Delete campaign
+                    RemoveCampaign(guid)
+                end
+            end)
+
+            -- ✅ Store campaign entry in UI list
+            table.insert(CampaignListScrollChild.entries, entry)
+
+            -- Move down to next campaign
+            yOffset = yOffset - 35
+        end
+
+        yOffset = yOffset - 10  -- Extra space between categories
+    end
+
+    -- ✅ Restore **"New Campaign" Button** as it was before
+    local newCampaignButton = CreateFrame("Button", nil, CampaignListScrollChild, "UIPanelButtonTemplate")
+    newCampaignButton:SetSize(180, 25)
+    newCampaignButton:SetPoint("TOP", CampaignListScrollChild, "TOP", 0, yOffset)
+    newCampaignButton:SetText("New Dataset")
+    newCampaignButton:SetScript("OnClick", CreateNewCampaign)
+    table.insert(CampaignListScrollChild.entries, newCampaignButton)
 end
+
+
+
+
 
 -- Adds the default campaign containing built-in spells
 local function AddDefault()
@@ -1961,7 +2416,7 @@ local function UpdateProgressBar(guid, received, total)
     progressBar:SetMinMaxValues(0, total)
     progressBar:SetValue(received)
     local percent = (received / total) * 100
-    progressBar.text:SetText(string.format("Receiving Campaign: %.1f%%", percent))
+    progressBar.text:SetText(string.format("[RPT] Receiving data: %.1f%%", percent))
 
     -- Hide when done
     if received >= total then
@@ -1972,7 +2427,7 @@ local function UpdateProgressBar(guid, received, total)
 end
 
 
-function CampaignManager:SendCampaign(guid)
+function CampaignManager:SendCampaignToGroup(guid)
     if not _G.Campaigns[guid] then
         print("|cffff0000Error: No campaign selected!|r")
         return
@@ -1998,12 +2453,51 @@ function CampaignManager:SendCampaign(guid)
         C_Timer.After(i * 1, function()  -- Delays each message by 0.2 seconds
             local chunkMessage = guid .. ":" .. i .. ":" .. chunk
             --print("|cff00ff00[Debug] Sending CHUNK " .. i .. " / " .. totalChunks .. "|r")
+            -- print(chunkMessage)
             C_ChatInfo.SendAddonMessage("CTCNEXT", chunkMessage, channel)
         end)
     end
 
-    print("|cff00ff00Sent campaign '" .. _G.Campaigns[guid].Name .. "' in " .. totalChunks .. " chunks.|r")
+    print("    |cff00ff00[RPT] Sent campaign '" .. _G.Campaigns[guid].Name .. "' in " .. totalChunks .. " chunks.|r")
 end
+
+function CampaignManager:SendCampaignToTarget(guid)
+    -- Ensure the campaign exists in memory
+    local campaign = _G.Campaigns[guid]
+    if not campaign then
+        print("|cffff0000Error: No campaign selected!|r")
+        return
+    end
+
+    -- Ensure a valid target exists
+    local targetName = UnitName("target")
+    if not targetName or targetName == "" then
+        print("|cffff0000Error: No valid target selected!|r")
+        return
+    end
+
+    -- Serialize the campaign data
+    local chunks, totalChunks = CampaignManager:SerializeCampaign(guid)
+    if not chunks then
+        print("|cffff0000Error: Failed to serialize campaign data!|r")
+        return
+    end
+
+    -- Send initial message with total chunk count
+    local initMessage = guid .. ":" .. totalChunks
+    C_ChatInfo.SendAddonMessage("CTCINIT", initMessage, "WHISPER", targetName)
+
+    -- Send each chunk with a 1-second delay to prevent message loss
+    for i, chunk in ipairs(chunks) do
+        C_Timer.After(i * 1, function()
+            local chunkMessage = guid .. ":" .. i .. ":" .. chunk
+            C_ChatInfo.SendAddonMessage("CTCNEXT", chunkMessage, "WHISPER", targetName)
+        end)
+    end
+
+    print("    |cff00ff00[RPT]Sending campaign '" .. campaign.Name .. "' to " .. targetName .. " in " .. totalChunks .. " chunks.|r")
+end
+
 
 
 local incomingCampaigns = {} -- Store incoming campaign data per guid
@@ -2038,8 +2532,6 @@ local function HandleCampaignChunk(prefix, message, channel, sender)
 
             UpdateProgressBar(guid, incomingCampaigns[guid].receivedCount, incomingCampaigns[guid].totalChunks)
 
-            -- print("|cff00ff00[Debug] Received CHUNK " .. chunkIndex .. " / " .. incomingCampaigns[guid].totalChunks .. " from " .. sender .. "|r")
-
             -- If all chunks received, reassemble
             if incomingCampaigns[guid].receivedCount == incomingCampaigns[guid].totalChunks then
                 local fullData = table.concat(incomingCampaigns[guid].receivedChunks)
@@ -2057,7 +2549,7 @@ local function HandleCampaignChunk(prefix, message, channel, sender)
                     -- Store in the database
                     _G.CampaignToolkitCampaignsDB[guid] = CopyTable(_G.Campaigns[guid])
 
-                    print("|cff00ff00Successfully received and stored campaign: " .. _G.Campaigns[guid].Name .. "|r")
+                    print("|cff00ff00[RPT] Successfully received and stored campaign: " .. _G.Campaigns[guid].Name .. "|r")
 
                     UpdateCampaignList() -- Update UI
                 else
@@ -2092,6 +2584,7 @@ local function SerializeSpells(spellList)
         spellData = spellData .. "DiceToDamage=" .. (spell.DiceToDamage or "") .. "@"
         spellData = spellData .. "Class=" .. (spell.Class or "General") .. "@"
         spellData = spellData .. "Specialisation=" .. (spell.Specialisation or "") .. "@"
+        spellData = spellData .. "CritModifier=" .. (spell.CritModifier or "") .. "@"
 
         -- Serialize Requires using `$` delimiter
         if spell.Requires and #spell.Requires > 0 then
@@ -2112,13 +2605,6 @@ local function SerializeSpells(spellList)
             spellData = spellData .. "DamageModifiers=[" .. table.concat(spell.DamageModifiers, "$") .. "]@"
         else
             spellData = spellData .. "DamageModifiers=[]@"
-        end
-
-        -- Serialize CritModifiers using `$` delimiter
-        if spell.CritModifiers and #spell.CritModifiers > 0 then
-            spellData = spellData .. "CritModifiers=[" .. table.concat(spell.CritModifiers, "$") .. "]@"
-        else
-            spellData = spellData .. "CritModifiers=[]@"
         end
 
         -- Serialize Auras using `$` delimiter
@@ -2149,6 +2635,7 @@ local function SerializeAuras(auraList)
         auraData = auraData .. "Guid=" .. (aura.Guid or "nil") .. "@"
         auraData = auraData .. "Type=" .. (aura.Type or "Debuff") .. "@"
         auraData = auraData .. "TriggerOn=" .. (aura.TriggerOn or "Cast") .. "@"
+        auraData = auraData .. "ApplyTo=" .. (aura.ApplyTo or "Target") .. "@"
         auraData = auraData .. "Icon=" .. (aura.Icon) .. "@"
         auraData = auraData .. "Description=" .. (aura.Description or "This aura has no description.") .. "@"
         auraData = auraData .. "RemainingTurns=" .. tostring(aura.RemainingTurns or 1) .. "@"
@@ -2194,6 +2681,7 @@ function CampaignManager:SerializeCampaign(guid)
     campaignData = campaignData .. "LastUpdated=" .. tostring(campaign.LastUpdated) .. "^"
     campaignData = campaignData .. "Icon=" .. campaign.Icon .. "^"
     campaignData = campaignData .. "Author=" .. campaign.Author .. "^"
+    campaignData = campaignData .. "Parent=" .. campaign.Parent .. "^"
 
     -- Include serialized AuraList
     campaignData = campaignData .. "AuraList=" .. SerializeAuras(campaign.AuraList) .. "^"
@@ -2202,7 +2690,7 @@ function CampaignManager:SerializeCampaign(guid)
     campaignData = campaignData:sub(1, -2) .. "}" -- Remove trailing comma and close table
 
     -- Split into 200-byte chunks
-    local chunkSize = 240
+    local chunkSize = 200
     local totalChunks = math.ceil(#campaignData / chunkSize)
     local chunks = {}
 
@@ -2310,12 +2798,9 @@ local function DeserializeSpellList(data)
         for entry in data:gmatch("([^$]+)") do
             entry = entry:match("^%s*(.-)%s*$") -- Trim leading/trailing spaces
             entry = entry:gsub("[%[%]{}]", "") -- **Remove any unwanted `[]` or `{}`**
-            print("... " .. entry) -- Debugging output
             table.insert(list, entry)
         end
     end
-
-    print(#list)
 
     return list
 end
@@ -2353,8 +2838,10 @@ local function DeserializeSpells(data)
                 -- **Convert numeric values where applicable**
                 if k == "ManaCost" then
                     spell[k] = tonumber(v)
+                elseif k == "CritModifier" then
+                    spell[k] = type(v) == "string" and v or "None"
                 -- **Deserialize lists using `$` delimiter**
-                elseif k == "HitModifiers" or k == "CritModifiers" or k == "DamageModifiers" or k == "Auras" or k == "Requires" then
+                elseif k == "HitModifiers" or k == "DamageModifiers" or k == "Auras" or k == "Requires" then
                     spell[k] = DeserializeSpellList(v)
                 else
                     spell[k] = v:gsub("\\'", "'") -- Unescape single quotes
@@ -2395,7 +2882,6 @@ function CampaignManager:DeserializeCampaign(data)
             elseif k == "SpellList" then
                 campaign[k] = DeserializeSpells(v)
             else
-                print("Setting " ..k.. " to " ..v)
                 campaign[k] = v:gsub("\\'", "'") -- Unescape single quotes
             end
         end
@@ -2429,6 +2915,14 @@ local function UpdateCampaignsOnEvents()
     UpdateCampaignList()
 end
 
+local function LoadAllCampaigns()
+    _G.Campaigns = {}  -- Reset memory storage
+
+    for guid, campaignData in pairs(_G.CampaignToolkitCampaignsDB) do
+        _G.Campaigns[guid] = CopyTable(campaignData)
+    end
+end
+
 -- Hooking Campaign Manager to the game events
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LOGOUT")
@@ -2436,6 +2930,7 @@ eventFrame:RegisterEvent("PLAYER_LEAVING_WORLD") -- Ensures save on reload
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD") -- Ensures data is available on login
 eventFrame:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_ENTERING_WORLD" then
+        LoadAllCampaigns()
         UpdateCampaignList()  -- Update the UI list of campaigns
     end
 end)

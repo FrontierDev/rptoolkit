@@ -5,6 +5,10 @@ print("[CTSPlayerTurn] Addon prefix registered.")
 local PlayerTurn = {}
 _G.PlayerTurn = PlayerTurn
 
+-- Move this elsewhere at some point
+PlayerSettingsDB = PlayerSettingsDB or {}
+
+
 -- Turn-based resources remaining
 _G.playerHasAction = true
 _G.playerHasBonusAction = true
@@ -12,6 +16,11 @@ _G.playerHasReacion = true
 _G.playerCanDodge = true
 _G.playerCanParry = true
 _G.playerCanBlock = true
+_G.playerHasHaste = false
+_G.playerConditions = {}
+
+local manaRegenerated = 0
+local healthRegenerated = 0
 
 local actionBar = nil  -- Initialize actionBar as nil
 local spellSlots = {}
@@ -27,10 +36,9 @@ _G.equippedSpells = _G.equippedSpells or {}
 -- Store health and mana bars outside the method for global access
 local healthBar, manaBar, healthText, manaText
 
-
 -- Called when the player's turn begins.
 function PlayerTurn:OnPlayerTurn()
-    print("### Your turn has begun! ###")
+    print("|cff00ff00Your turn has begun!|r")
     
     -- Restore the player's turn-based resources
     _G.playerHasAction = true
@@ -40,10 +48,39 @@ function PlayerTurn:OnPlayerTurn()
     _G.playerCanParry = true
     _G.playerCanBlock = true
 
+    PlayerTurn:RegenerateMana()
+    PlayerTurn:RegenerateHealth()
+
     ShowPlayerTurnUI()
 
     -- Advances any auras that the player has cast.
     CTAura:AdvanceTurn()
+end
+
+-- Regenerate mana per turn.
+function PlayerTurn:RegenerateMana()
+    if _G.hiddenStats["ManaRegen"] > 0 then
+        manaRegenerated = manaRegenerated + (_G.hiddenStats["ManaRegen"] or 0)
+
+        if math.floor(manaRegenerated) > 0 then 
+            local remainder = manaRegenerated - math.floor(manaRegenerated)
+            _G.hiddenStats["Mana"] = math.min((_G.hiddenStats["Mana"] or 0) + math.floor(manaRegenerated), _G.hiddenStats["MaxMana"] or 0)
+            manaRegenerated = remainder
+        end
+    end
+end
+
+-- Regenerate health per turn.
+function PlayerTurn:RegenerateHealth()
+    if _G.hiddenStats["HealthRegen"] > 0 then
+        healthRegenerated = healthRegenerated + (_G.hiddenStats["HealthRegen"] or 0)
+
+        if math.floor(healthRegenerated) > 0 then 
+            local remainder = healthRegenerated - math.floor(healthRegenerated)
+            _G.hiddenStats["Health"] = math.min((_G.hiddenStats["Health"] or 0) + math.floor(healthRegenerated), _G.hiddenStats["MaxHealth"] or 0)
+            healthRegenerated = remainder
+        end
+    end
 end
 
 -- Shows the player turn UI.
@@ -137,6 +174,9 @@ function DisplayActionBar()
         return
     end
 
+    currentOffsetX = PlayerSettingsDB.actionbarOffsetX or 0
+    currentOffsetY = PlayerSettingsDB.actionbarOffsetY or -100
+
     -- Define the number of rows and columns, as well as slot size
     local SLOT_SIZE, SLOT_PADDING, ROWS, COLUMNS = 54, -16, 2, 5  -- Initial 2 rows of 5 slots
     local newColumns = 8  -- Total columns after adding 6 more slots (5 original + 3 new for second group)
@@ -181,6 +221,7 @@ function DisplayActionBar()
     -- Create X offset slider (using the new function)
     CreateOffsetSlider("OffsetXSlider", currentOffsetX, -200, 200, 180, sliderFrame, function(self, value)
         currentOffsetX = value
+        PlayerTurnDB.actionbarOffsetX = value
         -- Move the action bar live as the slider is adjusted
         if not isSliderMoving then
             actionBar:SetPoint("CENTER", UIParent, "CENTER", currentOffsetX, currentOffsetY)      
@@ -190,6 +231,7 @@ function DisplayActionBar()
     -- Create Y offset slider (using the new function)
     CreateOffsetSlider("OffsetYSlider", currentOffsetY, -200, 200, 180, sliderFrame, function(self, value)
         currentOffsetY = value
+        PlayerSettingsDB.actionbarOffsetY = value
         -- Move the action bar live as the slider is adjusted
         if not isSliderMoving then
             actionBar:SetPoint("CENTER", UIParent, "CENTER", currentOffsetX, currentOffsetY)
@@ -407,6 +449,9 @@ end
 
 -- Function to create health and mana bars
 function PlayerTurn:CreateHealthAndManaBars()
+    if healthBar or manaBar then return end
+
+
     -- Create Health Bar
     healthBar = CreateFrame("StatusBar", "HealthBar", UIParent)
     healthBar:SetSize(180, 5)  -- Set size for the health bar
@@ -477,7 +522,7 @@ end
 
 -- Functions to call when the player's turn ends.
 function OnEndPlayerTurn()
-    print("### You end your turn ###")
+    CombatLog:PrintMessage("|cffffff00Your end your turn.|r")
     PlayerTurn:EndTurnAndSendMessage()
 
     -- Make sure the player cannot do anything else in between turns, other than reactions.
@@ -515,8 +560,6 @@ function PlayerTurn:OnTurnEndMessageReceived(message, sender)
 end
 
 function PlayerTurn:RedrawAllAuras()
-    print("Redrawing all auras on player...")
-
     -- Ensure ActiveAuraIcons exists
     PlayerTurn.ActiveAuraIcons = PlayerTurn.ActiveAuraIcons or {}
 
@@ -547,8 +590,6 @@ function PlayerTurn:RedrawAllAuras()
             auraFrame:Hide()
         end
     end
-
-    print("✅ Aura redraw complete!")
 end
 
 
@@ -562,10 +603,7 @@ function PlayerTurn:DrawAuraIcon(auraGuid, sender)
     local auraData = nil
     for _, campaign in pairs(_G.CampaignToolkitCampaignsDB) do
         if campaign.AuraList then  -- Ensure the campaign has an AuraList
-            print("Checking campaign: " ..campaign.Name)
             for _, aura in pairs(campaign.AuraList) do
-                print("... checking against " ..aura.Guid)
-
                 if aura.Guid == auraGuid then
                     auraData = aura
                     break
@@ -640,7 +678,6 @@ function PlayerTurn:AdvanceAurasFromCaster(casterName)
     casterName = strsplit("-", casterName) -- Remove realm name
 
     if not PlayerTurn.ActiveAuraIcons or #PlayerTurn.ActiveAuraIcons == 0 then
-        print("No active auras to tick down.")
         return
     end
 
@@ -653,12 +690,9 @@ function PlayerTurn:AdvanceAurasFromCaster(casterName)
             -- Reduce the remaining turns
             auraFrame.RemainingTurns = (auraFrame.RemainingTurns) - 1
 
-            print("Tick Advance from:", casterName, "| New Turns Left:", auraFrame.RemainingTurns)
-
             -- Remove if expired
             if auraFrame.RemainingTurns <= 0 then
                 hasExpired = true
-                print("Aura expired and removed:", auraFrame.Guid)
                 auraFrame:Hide()
                 table.remove(PlayerTurn.ActiveAuraIcons, i)
             else
@@ -685,8 +719,6 @@ function PlayerTurn:SendAuraTickAdvanceMessage()
 
     -- Send the message to all group members
     C_ChatInfo.SendAddonMessage(ADDON_PREFIX, message, channel)
-
-    print("Sent Aura Tick Down Message from:", senderName)
 end
 
 
@@ -706,8 +738,6 @@ function PlayerTurn:SendAddAuraMessage(targetPlayer, auraGuid)
 
     -- Send the addon message using WHISPER channel
     C_ChatInfo.SendAddonMessage(ADDON_PREFIX, message, "WHISPER", targetPlayer)
-
-    print("📨 Sent Add Aura Message via WHISPER to", targetPlayer, "with GUID:", auraGuid)
 end
 
 -- Set up the event listener for receiving addon messages
@@ -722,10 +752,8 @@ frame:SetScript("OnEvent", function(_, event, prefix, message, _, sender)
     local command, auraGuid = strsplit(";", message, 2)
     
     if command == "TICK_AURA" then
-        print("Received Aura Advance Request from:", sender)
         PlayerTurn:AdvanceAurasFromCaster(sender)
     elseif command == "ADD_AURA" and auraGuid then
-        print("Received Add Aura request from", sender, "with GUID:", auraGuid)
         PlayerTurn:DrawAuraIcon(auraGuid, sender)
     else
         -- Fallback to OnTurnEndMessageReceived for other messages

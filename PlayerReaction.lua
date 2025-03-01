@@ -32,17 +32,15 @@ ReactionFrame.PromptText:SetText("Action Prompt Text Goes Here")  -- Placeholder
 -- Create action buttons (they will be added by the prompt functions)
 ReactionFrame.ActionButtons = {}
 
-function PlayerReaction:Request_Defensive(attacker, target, threshold, type, school)
-    local message = string.format("%s:%s:%s:%s:%s", type, attacker, target, tostring(threshold), school)
-    print(message)
-    
+function PlayerReaction:Request_Defensive(attacker, target, threshold, type, school, spell)
+    local message = string.format("%s:%s:%s:%s:%s:%s", type, attacker, target, tostring(threshold), school, spell)
+
     -- Send the message to the selected channel (party or raid)
     C_ChatInfo.SendAddonMessage(ADDON_PREFIX, message, "WHISPER", target)
-    
-    print("Requesting defensive roll from " .. target .. " via WHISPER.")
 end
 
-function PlayerReaction:Send_DefensiveResult(attacker, defender, result, type, school)
+-- Send the result of a defensive roll to the group leader.
+function PlayerReaction:Send_DefensiveResult(attacker, defender, result, type, school, spell)
     local groupLeaderName = nil
 
     if IsInRaid() then
@@ -51,22 +49,124 @@ function PlayerReaction:Send_DefensiveResult(attacker, defender, result, type, s
         groupLeaderName = UnitName("party1")  -- For party
     end
 
-    print("Group Leader: " .. (groupLeaderName or "None"))
+    if UnitIsGroupLeader("Player") then
+        local playerName, playerRealm = strsplit("-", defender)
+        playerName = playerName or sender  -- Fallback in case the split doesn't work
 
-    local message = string.format("RESULT:%s:%s:%s:%s:%s", type, attacker, defender, result, school)
-    print(message)
-    
-    if not UnitName("Player") == groupLeaderName then
+        -- Find the index of the playerName in awaitingPlayers
+        local playerIndex
+        for index, name in ipairs(UnitFrameTurn.AwaitingPlayers) do
+            if name == playerName then
+                playerIndex = index
+                break
+            end
+        end
+
+        -- If the playerName is found, remove it from the table
+        if playerIndex then
+            table.remove(UnitFrameTurn.AwaitingPlayers, playerIndex)
+        else
+            print("Player not found in awaitingPlayers list.")
+        end
+    end
+
+    local message = string.format("RESULT:%s:%s:%s:%s:%s", spell, attacker, defender, result, school)
+
+    if UnitName("Player") ~= groupLeaderName then
         -- Send the message to the selected channel (party or raid)
         C_ChatInfo.SendAddonMessage(ADDON_PREFIX, message, "WHISPER", groupLeaderName)
-    
-        print("Sending defensive roll result to " .. groupLeaderName .. " via WHISPER.")
     else
         PlayerReaction:HandleAddonMessage(message, UnitName("Player"))
     end
 end
 
-function ReactionFrame:Prompt_MeleeDefensive(attacker, threshold, school)
+function ReactionFrame:Prompt_CounterAttack(attacker)
+    -- Set the title and text prompt
+    self.Title:SetText("Attacker: " ..attacker)
+    self.PromptText:SetText("Roll to Counterattack")
+
+    -- Clear previous buttons
+    for _, button in pairs(self.ActionButtons) do
+        button:Hide()
+    end
+    self.ActionButtons = {}
+
+    -- Create Parry, Dodge, and Block Icon Buttons
+    local actionIcons = {
+        { name = "Attack", icon = "Interface\\ICONS\\inv_sword_01" }
+    }
+
+    -- Determine the required size of the frame based on the number of action icons
+    local iconSize = 32
+    local spacing = 34
+    local numIcons = #actionIcons
+    local frameHeight = 100   -- 120 is for the header and text
+    local frameWidth = 120 + numIcons * (iconSize + 10) -- Standard width for icon buttons and titles
+
+    -- Resize the frame to fit the elements
+    self:SetSize(frameWidth, frameHeight)
+
+    -- Position icons and create them
+    for i, action in ipairs(actionIcons) do
+        local iconButton = CreateFrame("Button", nil, self)
+        iconButton:SetSize(iconSize, iconSize)
+        iconButton:SetPoint("TOP", self, "TOP", (i - 1) * spacing - 33, -60)  -- Position icons below the prompt text
+
+        local icon = iconButton:CreateTexture(nil, "ARTWORK")
+        icon:SetAllPoints(iconButton)
+        icon:SetTexture(action.icon)
+
+        -- Button click action
+        iconButton:SetScript("OnClick", function()
+            -- Roll to hit
+            local hitRoll, baseRoll = Dice.Roll("1d20", string.format("to hit (Counterattack)"), { "meleeHit" }, false, "NO_SCROLL")
+            local target = attacker
+            local hit = false
+            for _, frame in pairs(UnitFrames.frames) do
+                if frame.isVisible and frame.NPCName == target then 
+                    if hitRoll >= tonumber(frame.DefensiveAC.Melee) then hit = true end
+                end
+            end
+            if not hit then
+                CombatLog:PrintMessage(string.format("Your counterattack failed to damage %s.", target))
+                Common:CreateFloatingText("Miss", 1, 1, 1)
+                self:Hide()
+                return
+            end
+
+            -- Check for crit
+            local critCheck = Common:CheckForCrit("meleeCrit", baseRoll)
+            local coefficient = 1
+            local spellSender = string.format("%s's counterattack", UnitName("player"))
+            if critCheck == "CRIT_SUCCESS" then 
+                coefficient = 2 + (_G.hiddenStats.CriticalStrikeDamage/100)
+            elseif critCheck == "CRIT_FAIL" then
+                -- print("Critical fail!")
+            else
+                -- Do nothing (wasn't a crit!)
+            end
+
+            -- Roll damage
+            local damageDice, weaponName = CTSpell:GetDamageDiceFromWeapon("Main Hand") 
+            local message = string.format("damage (%s)", weaponName)
+            if critCheck == "CRIT_SUCCESS" then message = string.format("damage (%s) (Critical, x%.1f)", weaponName, coefficient) end
+            local damageRoll = coefficient * Dice.Roll(damageDice, message, { "meleeBonus" }, false, "DAMAGE")
+            Targeting:ApplyDamage(spellSender, target, math.floor(damageRoll + 0.5), "Physical", "DIRECT")
+
+            -- Trigger any auras that have a TargetHit trigger.
+            CTAura:OnEnemyHit(target)
+
+            self:Hide()
+        end)
+
+        table.insert(self.ActionButtons, iconButton)  -- Store the icon button for later use
+    end
+
+    -- Show the frame
+    self:Show()
+end
+
+function ReactionFrame:Prompt_MeleeDefensive(attacker, threshold, school, spell)
     -- Set the title and text prompt
     self.Title:SetText("Attacker: " ..attacker)
     self.PromptText:SetText("Choose a defensive roll.")
@@ -78,7 +178,7 @@ function ReactionFrame:Prompt_MeleeDefensive(attacker, threshold, school)
     self.ActionButtons = {}
 
     if not _G.playerCanBlock and not _G.playerCanParry and not _G.playerCanDodge then
-        PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "FAIL", "MELEE", school)
+        PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "FAIL", "MELEE", school, spell)
         return
     end
 
@@ -125,27 +225,30 @@ function ReactionFrame:Prompt_MeleeDefensive(attacker, threshold, school)
         iconButton:SetScript("OnClick", function()
             if not canUseAction then return end
 
-            local roll = 0
+            local roll, baseRoll = 0
             if action.name == "Block" then
-                roll = Dice.Roll("1d20", "Block", "blockBonus", false, "ALL")
+                roll, baseRoll = Dice.Roll("1d20", "Block", "blockBonus", false, "ALL")
                 _G.playerCanBlock = false
             elseif action.name == "Parry" then
-                roll = Dice.Roll("1d20", "Parry", "parryBonus", false, "ALL")
+                roll, baseRoll = Dice.Roll("1d20", "Parry", "parryBonus", false, "ALL")
                 _G.playerCanParry = false
             elseif action.name == "Dodge" then
-                roll = Dice.Roll("1d20", "Dodge", "dodgeBonus", false, "ALL")
+                roll, baseRoll = Dice.Roll("1d20", "Dodge", "dodgeBonus", false, "ALL")
                 _G.playerCanDodge = false
             end
 
             if tonumber(roll) < tonumber(threshold) then
-                print("Failed " ..action.name.. "!")
-                PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "FAIL", "MELEE", school)
+                CTAura:OnHitTaken(attacker)
+                PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "FAIL", "MELEE", school, spell)
+                self:Hide()
             else
-                print("Succeeded " ..action.name.. "!")
-                PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "SUCCESS", "MELEE", school)
+                PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "SUCCESS", "MELEE", school, spell)           
+                if action.name == "Parry" and Common:CheckForCrit("parryCrit", baseRoll) then 
+                    ReactionFrame:Prompt_CounterAttack(attacker) 
+                elseif action.name == "Dodge" and Common:CheckForCrit("dodgeCrit", baseRoll) then 
+                    ReactionFrame:Prompt_CounterAttack(attacker) 
+                end
             end
-
-            self:Hide()
         end)
 
         table.insert(self.ActionButtons, iconButton)  -- Store the icon button for later use
@@ -155,13 +258,13 @@ function ReactionFrame:Prompt_MeleeDefensive(attacker, threshold, school)
     self:Show()
 end
 
-function ReactionFrame:Prompt_RangedDefensive(attacker, threshold, school)
+function ReactionFrame:Prompt_RangedDefensive(attacker, threshold, school, spell)
     -- Set the title and text prompt
     self.Title:SetText("Attacker: " ..attacker)
     self.PromptText:SetText("Choose a defensive roll.")
 
     if not _G.playerCanBlock and not _G.playerCanDodge then
-        PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "FAIL", "RANGED", school)  
+        PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "FAIL", "RANGED", school, spell)  
         return
     end
 
@@ -208,8 +311,6 @@ function ReactionFrame:Prompt_RangedDefensive(attacker, threshold, school)
 
         -- Button click action
         iconButton:SetScript("OnClick", function()
-            print(action.name .. " defense selected")
-
             local roll = 0
             if action.name == "Block" then
                 roll = Dice.Roll("1d20", "Block", "blockBonus", false, "ALL")
@@ -221,12 +322,11 @@ function ReactionFrame:Prompt_RangedDefensive(attacker, threshold, school)
             end
 
             if tonumber(roll) < tonumber(threshold) then
-                print("Failed " ..action.name.. "!")
-                PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "FAIL", "RANGED", school)
+                CTAura:OnHitTaken(attacker)
+                PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "FAIL", "RANGED", school, spell)
                 _G.playerCanBlock = false
             else
-                print("Succeeded " ..action.name.. "!")
-                PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "SUCCESS", "RANGED", school)
+                PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "SUCCESS", "RANGED", school, spell)
             end
 
             self:Hide()
@@ -239,7 +339,7 @@ function ReactionFrame:Prompt_RangedDefensive(attacker, threshold, school)
     self:Show()
 end
 
-function ReactionFrame:Prompt_SpellDefensive(attacker, threshold, school)
+function ReactionFrame:Prompt_SpellDefensive(attacker, threshold, school, spell)
     -- Set the title and text prompt
     self.Title:SetText("Attacker: " .. attacker)
     self.PromptText:SetText("Choose a resistance roll.")
@@ -265,7 +365,6 @@ function ReactionFrame:Prompt_SpellDefensive(attacker, threshold, school)
     self.selectedActionIcons = {}
     for i, action in ipairs(actionIcons) do
         if action.name == school then
-            print("Adding " .. school .. " to reaction.")
             table.insert(self.selectedActionIcons, action)
         end
     end
@@ -292,16 +391,13 @@ function ReactionFrame:Prompt_SpellDefensive(attacker, threshold, school)
 
         -- Button click action
         iconButton:SetScript("OnClick", function()
-            print(action.name .. " defense selected")
-
             local roll = Dice.Roll("1d20", "Resist " ..school, action.modifier, false, "ALL")
 
             if tonumber(roll) < tonumber(threshold) then
-                print("Failed " .. action.name .. "!")
-                PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "FAIL", "SPELL", school)
+                CTAura:OnHitTaken(attacker)
+                PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "FAIL", "SPELL", school, spell)
             else
-                print("Succeeded " .. action.name .. "!")
-                PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "SUCCESS", "SPELL", school)
+                PlayerReaction:Send_DefensiveResult(attacker, UnitName("Player"), "SUCCESS", "SPELL", school, spell)
             end
 
             self:Hide()
@@ -326,19 +422,13 @@ function PlayerReaction:HandleAddonMessage(msg, sender)
         local defenderName = components[4]
         local result = components[5]
 
-        -- Debug
-        print("Received a defensive roll result: " ..defenderName.. " - " ..result)
-        
         if UnitIsGroupLeader("Player") then
-            print("Handling awaiting list...")
-
             local playerName, playerRealm = strsplit("-", sender)
             playerName = playerName or sender  -- Fallback in case the split doesn't work
 
             -- Find the index of the playerName in awaitingPlayers
             local playerIndex
             for index, name in ipairs(UnitFrameTurn.AwaitingPlayers) do
-                print("In list: " ..name)
                 if name == playerName then
                     playerIndex = index
                     break
@@ -348,7 +438,6 @@ function PlayerReaction:HandleAddonMessage(msg, sender)
             -- If the playerName is found, remove it from the table
             if playerIndex then
                 table.remove(UnitFrameTurn.AwaitingPlayers, playerIndex)
-                print("No longer awaiting player: " .. playerName)
             else
                 print("Player not found in awaitingPlayers list.")
             end
@@ -359,7 +448,6 @@ function PlayerReaction:HandleAddonMessage(msg, sender)
         end
     else
         if components[1] ~= "MELEE" and components[1] ~= "RANGED" and components[1] ~= "SPELL" then
-            print(components[1])
             return
         end
 
@@ -368,18 +456,15 @@ function PlayerReaction:HandleAddonMessage(msg, sender)
         local targetName = components[3]
         local threshold = components[4]
         local school = components[5]
+        local spell = components[6]
 
         if attackerName and targetName and threshold then
-            print(attackerName .. " attacked " .. targetName .. ".  Threshold to defend is " .. threshold)
-
-            print(components[1])
-
             if components[1] == "MELEE" then
-                ReactionFrame:Prompt_MeleeDefensive(attackerName, threshold, school)
+                ReactionFrame:Prompt_MeleeDefensive(attackerName, threshold, school, spell)
             elseif components[1] == "RANGED" then
-                ReactionFrame:Prompt_RangedDefensive(attackerName, threshold, school)
+                ReactionFrame:Prompt_RangedDefensive(attackerName, threshold, school, spell)
             elseif components[1] == "SPELL" then
-                ReactionFrame:Prompt_SpellDefensive(attackerName, threshold, school)
+                ReactionFrame:Prompt_SpellDefensive(attackerName, threshold, school, spell)
             end
         else
             print("Invalid message format received.")

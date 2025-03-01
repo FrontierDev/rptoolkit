@@ -19,7 +19,6 @@ function Targeting:ChangeNpcTarget(unitID)
     _G.RefreshActionBar()  -- Call to refresh the action bar (assuming this function is defined elsewhere)
 end
 
-
 function Targeting:ChangePcTarget()
     local targetUnit = "target"  -- Default target unit ID
 
@@ -87,22 +86,28 @@ end
 
 
 
-function Targeting:ApplyDamage(target, damage, school)
+function Targeting:ApplyDamage(source, target, damage, school, type)
     if not damage or damage <= 0 then
-        -- print("Invalid damage value.")
         return
     end
 
-    local targetUnit = Targeting.npcTarget
-    if targetUnit == "NONE" then
-        -- print("No NPC target selected.")
-        return
-    end
-
-    if Targeting:UnitIsPlayer(targetUnit) then
-        -- friendly logic
+    if Targeting:UnitIsPlayer(target) then      
+        Broadcast:DamagePlayer(source or "Unknown Source", target, damage, school, type or "DIRECT")
     else
-        UnitFrames:Broadcast_ApplyDamage(targetUnit, damage, school)
+        Broadcast:DamageUnitFrame(source, target, damage, school, type or "DIRECT")
+    end
+end
+
+function Targeting:ApplyHealing(source, target, healing, type)
+    if not healing or healing <= 0 then
+        return
+    end
+
+    if Targeting:UnitIsPlayer(target) then      
+        Broadcast:HealPlayer(source or "Unknown Source", target, healing, type or "DIRECT")
+    else
+        print("Called to heal unit frame " ..target.. " by " ..healing.. " but unit frame healing is NYI!")
+        --Broadcast:HealingUnitFrame(source, target, healing, type or "DIRECT")
     end
 end
 
@@ -115,7 +120,7 @@ function Targeting:ApplyAura(target, auraGuid)
     if Targeting:UnitIsPlayer(target) then
         PlayerTurn:SendAddAuraMessage(target, auraGuid)
     else
-        UnitFrames:Broadcast_ApplyAura(target, auraGuid)
+        Broadcast:AddAuraUnitFrame(target, auraGuid)
     end
 end
 

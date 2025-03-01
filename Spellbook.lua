@@ -3,6 +3,8 @@ _G.Spellbook = _G.Spellbook or {}
 
 _G.spellbookSlots = _G.spellbookSlots or {}
 
+_G.equippedSpellGUIDs = _G.equippedSpellGUIDs or {}
+
 local specialisations = {
     ["General"] = { "General" },
     ["Death Knight"] = { "Blood", "Frost", "Unholy" },
@@ -140,7 +142,7 @@ function Spellbook:Add(data)
         DiceToDamage = data.diceToDamage or nil,  -- Either specific dice (1d6, 2d8, etc.) or MAIN_HAND/OFF_HAND
         School = data.school or "Physical",
         DamageModifiers = data.damageModifiers or {},
-        CritModifier = data.critModifier or nil,
+        CritModifier = data.critModifier or "",
         ScriptId = data.scriptId or nil,
         Requires = data.requires or {},
         Auras = data.auras or {}
@@ -225,6 +227,10 @@ function Spellbook:Create(parentFrame)
                         slot.equipped = true
                         Spellbook:HighlightEquippedSpell(slot, true)
                         _G.RefreshActionBar()
+
+                        if not Common:TableContains(_G.equippedSpellGUIDs, self.spell.Guid) then
+                            table.insert(_G.equippedSpellGUIDs, self.spell.Guid)
+                        end
                     else
                         print("|cffff0000No available action bar slots!|r")
                     end
@@ -233,6 +239,16 @@ function Spellbook:Create(parentFrame)
                     slot.equipped = false
                     Spellbook:HighlightEquippedSpell(slot, false)
                     _G.RefreshActionBar()
+
+                    if Common:TableContains(_G.equippedSpellGUIDs, self.spell.Guid) then
+                        for i, guid in ipairs(_G.equippedSpellGUIDs) do
+                            if guid == self.spell.Guid then
+                                table.remove(_G.equippedSpellGUIDs, i)
+                                break  -- Exit loop after removing to avoid issues
+                            end
+                        end
+                    end
+
                 end
             end
         end)
@@ -297,6 +313,82 @@ function Spellbook:AddToSlots(spellData)
     end
     -- print("❌ No available spell slots!")
 end
+
+
+function Spellbook:LoadEquippedSpells()
+    if not _G.equippedSpellGUIDs or not Spellbook then return end
+
+    -- Prevent excessive stored spells
+    if #_G.equippedSpellGUIDs > 6 then _G.equippedSpellGUIDs = {} end
+
+    local equippedActionSlots = {}
+
+    -- Track which spells are already in action bar slots
+    for slotIndex = 11, 20 do
+        if _G.equippedSpells and _G.equippedSpells[slotIndex] then
+            equippedActionSlots[_G.equippedSpells[slotIndex].Guid] = slotIndex
+        end
+    end
+
+    for _, guid in ipairs(_G.equippedSpellGUIDs) do
+        -- ✅ Skip if the spell is already in `equippedSpellGUIDs`
+        if equippedActionSlots[guid] then
+            -- **Skip this iteration without `goto`**
+            goto_next = true
+        else
+            goto_next = false
+        end
+
+        if not goto_next then
+            local spellFound = false
+            for _, spell in ipairs(_G.Spellbook) do
+                if spell.Guid == guid then
+                    -- Find an open action bar slot
+                    local firstAvailableActionSlot = Spellbook:FindFirstAvailableActionSlot()
+                    if firstAvailableActionSlot then
+                        -- ✅ Equip spell in action bar slot
+                        CTSpell:EquipSpell(spell.Guid, firstAvailableActionSlot)
+                        _G.equippedSpells[firstAvailableActionSlot] = spell
+
+                        -- ✅ Draw the spell in the action bar immediately
+                        if DrawSpellAtSlot then
+                            DrawSpellAtSlot(firstAvailableActionSlot)
+                        end
+                    else
+                        print("|cffff0000No available action bar slots for spell: " .. spell.Name .. "|r")
+                    end
+
+                    -- ✅ Highlight the spellbook slot
+                    for _, slot in ipairs(_G.spellbookSlots) do
+                        if slot.spell and slot.spell.Guid == spell.Guid then
+                            slot.equipped = true
+                            Spellbook:HighlightEquippedSpell(slot, true)
+                            break
+                        end
+                    end
+
+                    spellFound = true
+                    break
+                end
+            end
+
+            if not spellFound then
+                print("|cffff0000Spell GUID not found in spellbook:|r " .. guid)
+            end
+        end
+    end
+
+    -- ✅ Force action bar refresh at the end
+    if _G.RefreshActionBar then
+        _G.RefreshActionBar()
+    end
+end
+
+
+
+
+
+
 
 function Spellbook:UpdateSpellbookUI()
     local selectedClass = UIDropDownMenu_GetText(self.ClassDropdown)

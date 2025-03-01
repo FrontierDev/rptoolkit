@@ -1,4 +1,4 @@
--- UnitFrameEditor.lua (Handles the Unit Frame Editing Window)
+﻿-- UnitFrameEditor.lua (Handles the Unit Frame Editing Window)
 
 local ADDON_PREFIX = _G.ADDON_PREFIX or "CTUF"  -- Ensure it uses the global prefix
 
@@ -100,6 +100,36 @@ local function CreateInputField(parent, labelText, yOffset, width, numeric)
     return input
 end
 
+
+-- Function to Create Heal Button
+local function CreateHealButton()
+    if not EditorFrame.HealButton then
+        EditorFrame.HealButton = CreateFrame("Button", "HealUnitButton", EditorFrame, "UIPanelButtonTemplate")
+        EditorFrame.HealButton:SetSize(24, 24) -- Small icon size
+        EditorFrame.HealButton:SetPoint("TOPRIGHT", EditorFrame, "TOPLEFT", 0, -5) -- Position it next to the editor window
+        EditorFrame.HealButton:Show()
+
+        -- Add Heal Icon
+        EditorFrame.HealButton.Icon = EditorFrame.HealButton:CreateTexture(nil, "ARTWORK")
+        EditorFrame.HealButton.Icon:SetSize(16, 16) -- Icon size
+        EditorFrame.HealButton.Icon:SetPoint("CENTER", EditorFrame.HealButton, "CENTER", 0, 0)
+        EditorFrame.HealButton.Icon:SetTexture("Interface\\ICONS\\spell_holy_heal") -- Use WoW's heal spell icon
+
+        -- Heal Logic
+        EditorFrame.HealButton:SetScript("OnClick", function()
+            if EditorFrame.SelectedFrame and EditorFrame.SelectedFrame.MaxHealth then
+                EditorFrame.SelectedFrame.CurrentHealth = EditorFrame.SelectedFrame.MaxHealth
+                Broadcast:SyncUnitFrame(EditorFrame.SelectedFrame)
+                CombatLog:PrintMessage(EditorFrame.SelectedFrame.NPCName .. " healed to full HP (" .. EditorFrame.SelectedFrame.MaxHealth .. ").")
+            else
+                print("No unit selected or Max HP not set.")
+            end
+        end)
+    end
+end
+
+CreateHealButton()
+
 -- Create Ability Score Modifiers
 local function CreateAbilityScoreModifiers(frame)
     local abilities = {
@@ -168,8 +198,8 @@ local function CreateOffensiveModifiers(frame)
 
     -- Popup Frame for Editing Values
     local PopupFrame = CreateFrame("Frame", "OffensePopup", UIParent, "BackdropTemplate")
-    PopupFrame:SetSize(200, 120)
-    PopupFrame:SetPoint("TOPLEFT", EditorFrame, "TOPRIGHT", 10, 0)
+    PopupFrame:SetSize(220, 160)
+    PopupFrame:SetPoint("TOPLEFT", EditorFrame, "TOPRIGHT", 225, -35)
     PopupFrame:SetBackdrop({
         bgFile = "Interface/DialogFrame/UI-DialogBox-Background",
         edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
@@ -345,7 +375,7 @@ local function CreateDefensiveAC(frame)
     -- Popup Frame for Editing AC
     local PopupFrame = CreateFrame("Frame", "ACPopup", UIParent, "BackdropTemplate")
     PopupFrame:SetSize(180, 100)
-    PopupFrame:SetPoint("TOPLEFT", EditorFrame, "TOPRIGHT", 10, 0)
+    PopupFrame:SetPoint("TOPLEFT", EditorFrame, "TOPRIGHT",  225, -35)
     PopupFrame:SetBackdrop({
         bgFile = "Interface/DialogFrame/UI-DialogBox-Background",
         edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
@@ -404,7 +434,7 @@ local function CreateDefensiveAC(frame)
         acText:SetText("15")
         acText:SetTextColor(1, 1, 1)
 
-        frame.DefensiveAC[stat.name] = { frame = iconFrame, text = acText, value = 15 }
+        frame.DefensiveAC[stat.name] = { frame = iconFrame, text = acText, value = 10 }
 
         -- Open Popup on Click
         iconFrame:SetScript("OnClick", function()
@@ -544,12 +574,17 @@ local function PopulateStatisticsTab()
 
     -- Create the NameInput field only if it hasn't been created already
     if not frame.NameInput then
-        frame.NameInput = CreateInputField(frame, "Unit Name:", -40, 150, false)
+        frame.NameInput = CreateInputField(frame, "Unit Name:", -20, 120, false)
     end
 
     -- Create NPC ID input field if it hasn't been created already
     if not frame.NPCIDInput then
-        frame.NPCIDInput = CreateInputField(frame, "NPC ID:", -70, 100, true)
+        frame.NPCIDInput = CreateInputField(frame, "NPC ID:", -45, 100, true)
+    end
+
+    -- Create Max HP input field if it hasn't been created already
+    if not frame.MaxHPInput then
+        frame.MaxHPInput = CreateInputField(frame, "Max HP:", -75, 100, true)
     end
 
     -- Create UI Sections
@@ -558,13 +593,275 @@ local function PopulateStatisticsTab()
     CreateDefensiveAC(frame)
 end
 
+local function OpenSpellEditor(unitFrame, spell)
+    -- Hide previous editor if it exists
+    if EditorFrame.SpellEditor then
+        EditorFrame.SpellEditor:Hide()
+    end
 
--- Function to Populate Spells Tab
-local function PopulateSpellsTab()
-    local text = EditorFrame.TabFrames[2]:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    text:SetPoint("CENTER", EditorFrame.TabFrames[2], "CENTER", 0, 0)
-    text:SetText("Spells Placeholder")
+    -- Create Spell Editor Frame
+    local spellEditor = CreateFrame("Frame", nil, EditorFrame, "BackdropTemplate")
+    spellEditor:SetSize(300, 400) -- Adjusted height to fit new field
+    spellEditor:SetPoint("LEFT", EditorFrame, "RIGHT", 10, 0)
+    spellEditor:SetBackdrop({
+        bgFile = "Interface/DialogFrame/UI-DialogBox-Background",
+        edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
+        tile = true, tileSize = 16, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 }
+    })
+    EditorFrame.SpellEditor = spellEditor
+
+    -- Spell Name Input
+    local spellNameLabel = spellEditor:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    spellNameLabel:SetPoint("TOPLEFT", spellEditor, "TOPLEFT", 15, -10)
+    spellNameLabel:SetText("Spell Name:")
+
+    local spellNameInput = CreateFrame("EditBox", nil, spellEditor, "InputBoxTemplate")
+    spellNameInput:SetSize(150, 20)
+    spellNameInput:SetPoint("TOPLEFT", spellNameLabel, "BOTTOMLEFT", 0, -5)
+    spellNameInput:SetAutoFocus(false)
+    spellNameInput:SetText(spell and spell.Name or "")
+
+    -- Spell Icon Input
+    local spellIconLabel = spellEditor:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    spellIconLabel:SetPoint("TOPLEFT", spellNameInput, "BOTTOMLEFT", 0, -10)
+    spellIconLabel:SetText("Spell Icon (ID):")
+
+    local spellIconInput = CreateFrame("EditBox", nil, spellEditor, "InputBoxTemplate")
+    spellIconInput:SetSize(150, 20)
+    spellIconInput:SetPoint("TOPLEFT", spellIconLabel, "BOTTOMLEFT", 0, -5)
+    spellIconInput:SetAutoFocus(false)
+    spellIconInput:SetText(spell and spell.Icon or "")
+
+    -- Dice Input
+    local diceLabel = spellEditor:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    diceLabel:SetPoint("TOPLEFT", spellIconInput, "BOTTOMLEFT", 0, -10)
+    diceLabel:SetText("Dice:")
+
+    local diceInput = CreateFrame("EditBox", nil, spellEditor, "InputBoxTemplate")
+    diceInput:SetSize(150, 20)
+    diceInput:SetPoint("TOPLEFT", diceLabel, "BOTTOMLEFT", 0, -5)
+    diceInput:SetAutoFocus(false)
+    diceInput:SetText(spell and spell.Dice or "")
+
+    -- School Dropdown
+    local schoolLabel = spellEditor:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    schoolLabel:SetPoint("TOPLEFT", diceInput, "BOTTOMLEFT", 0, -10)
+    schoolLabel:SetText("School:")
+
+    local schoolDropdown = CreateFrame("Frame", "SchoolDropdown", spellEditor, "UIDropDownMenuTemplate")
+    schoolDropdown:SetPoint("TOPLEFT", schoolLabel, "BOTTOMLEFT", -15, -5)
+
+    local schools = { "Physical", "Fire", "Frost", "Nature", "Arcane", "Fel", "Shadow", "Holy" }
+    local selectedSchool = spell and spell.School or "Physical"
+
+    UIDropDownMenu_SetWidth(schoolDropdown, 150)
+    UIDropDownMenu_SetText(schoolDropdown, selectedSchool)
+
+    UIDropDownMenu_Initialize(schoolDropdown, function(self, level, menuList)
+        for _, school in ipairs(schools) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = school
+            info.func = function()
+                selectedSchool = school
+                UIDropDownMenu_SetText(schoolDropdown, school)
+            end
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+
+    -- Type Dropdown
+    local typeLabel = spellEditor:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    typeLabel:SetPoint("TOPLEFT", schoolDropdown, "BOTTOMLEFT", 15, -10)
+    typeLabel:SetText("Type:")
+
+    local typeDropdown = CreateFrame("Frame", "TypeDropdown", spellEditor, "UIDropDownMenuTemplate")
+    typeDropdown:SetPoint("TOPLEFT", typeLabel, "BOTTOMLEFT", -15, -5)
+
+    local types = { "Melee", "Physical", "Spell", "Heal" }
+    local selectedType = spell and spell.Type or "Melee"
+
+    UIDropDownMenu_SetWidth(typeDropdown, 150)
+    UIDropDownMenu_SetText(typeDropdown, selectedType)
+
+    UIDropDownMenu_Initialize(typeDropdown, function(self, level, menuList)
+        for _, type in ipairs(types) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = type
+            info.func = function()
+                selectedType = type
+                UIDropDownMenu_SetText(typeDropdown, type)
+            end
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+
+    -- ✅ Spell DC Input (New Field)
+    local spellDCLabel = spellEditor:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    spellDCLabel:SetPoint("TOPLEFT", typeDropdown, "BOTTOMLEFT", 15, -10)
+    spellDCLabel:SetText("Spell DC:")
+
+    local spellDCInput = CreateFrame("EditBox", nil, spellEditor, "InputBoxTemplate")
+    spellDCInput:SetSize(150, 20)
+    spellDCInput:SetPoint("TOPLEFT", spellDCLabel, "BOTTOMLEFT", 0, -5)
+    spellDCInput:SetAutoFocus(false)
+    spellDCInput:SetText(spell and tostring(spell.DC) or "")
+
+    -- ✅ Aura Selection Dropdown (New Field)
+    local auraLabel = spellEditor:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    auraLabel:SetPoint("TOPLEFT", spellDCInput, "BOTTOMLEFT", 0, -10)
+    auraLabel:SetText("Apply Aura:")
+
+    local auraDropdown = CreateFrame("Frame", "AuraDropdown", spellEditor, "UIDropDownMenuTemplate")
+    auraDropdown:SetPoint("TOPLEFT", auraLabel, "BOTTOMLEFT", -15, -5)
+
+    -- Function to retrieve the list of auras from the Campaign Manager
+    local function GetLoadedAuras()
+        local auras = {}
+        for _, campaign in pairs(_G.Campaigns or {}) do
+            if campaign.AuraList then
+                for _, aura in ipairs(campaign.AuraList) do
+                    table.insert(auras, aura) -- Store the full aura object
+                end
+            end
+        end
+        return auras
+    end
+
+    local availableAuras = GetLoadedAuras()
+    local selectedAura = spell and spell.Aura or nil
+
+    UIDropDownMenu_SetWidth(auraDropdown, 150)
+    UIDropDownMenu_SetText(auraDropdown, selectedAura and (selectedAura.Name .. " (" .. selectedAura.Guid .. ")") or "None")
+
+    UIDropDownMenu_Initialize(auraDropdown, function(self, level, menuList)
+        for _, aura in ipairs(availableAuras) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = aura.Name .. " (" .. aura.Guid .. ")" -- Show Name & GUID in dropdown
+            info.func = function()
+                selectedAura = aura -- Store the full aura reference instead of just the GUID
+                UIDropDownMenu_SetText(auraDropdown, aura.Name .. " (" .. aura.Guid .. ")")
+            end
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+
+    -- ✅ Ensure `saveSpellButton` is created BEFORE trying to modify it
+    local saveSpellButton = CreateFrame("Button", nil, spellEditor, "UIPanelButtonTemplate")
+    saveSpellButton:SetSize(100, 20)
+    saveSpellButton:SetPoint("TOPLEFT", auraDropdown, "BOTTOMLEFT", 0, -10)
+    saveSpellButton:SetText("Save Spell")
+
+    -- Update Spell Save Logic to Store the Full Aura Reference
+    saveSpellButton:SetScript("OnClick", function()
+        local spellName = spellNameInput:GetText()
+        local spellIcon = spellIconInput:GetText()
+        local spellDice = diceInput:GetText()
+        local spellDC = tonumber(spellDCInput:GetText()) -- Convert DC input to number
+
+        if spellName and spellIcon and spellName ~= "" and spellIcon ~= "" then
+            local data = {
+                Name = spellName,
+                Icon = spellIcon,
+                Dice = spellDice,
+                School = selectedSchool,
+                Type = selectedType,
+                DC = spellDC,
+                Aura = selectedAura -- ✅ Store full Aura reference instead of just GUID
+            }
+
+            if spell then
+                -- Update existing spell
+                for k, v in pairs(data) do spell[k] = v end
+            else
+                -- Create new spell
+                UFSpell:AddSpell(unitFrame, data)
+            end
+
+            EditorFrame:UpdateSpellsTab()  -- Refresh spell list
+            spellEditor:Hide()
+        else
+            print("Please enter a spell name and a valid icon ID.")
+        end
+    end)
 end
+
+
+
+
+function EditorFrame:UpdateSpellsTab()
+    local frame = self.TabFrames[2] -- Spells tab
+
+    -- Clear previous content
+    if frame.SpellScrollFrame then
+        frame.SpellScrollFrame:Hide()
+    end
+    frame.SpellEntries = {}
+
+    -- Ensure we have a selected frame
+    if not self.SelectedFrame then return end
+    local unitFrame = self.SelectedFrame
+    local spells = unitFrame.UFSpells or {}
+
+    -- Create a scrollable spell list
+    local scrollFrame = CreateFrame("ScrollFrame", "SpellListScrollFrame", frame, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetSize(240, 200)
+    scrollFrame:SetPoint("TOP", frame, "TOP", 0, -30)
+
+    -- Create a scroll child to hold spell entries
+    local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+    scrollChild:SetSize(260, 250)
+    scrollFrame:SetScrollChild(scrollChild)
+    frame.SpellScrollFrame = scrollFrame
+
+    -- Create spell entry frames
+    for i, spell in ipairs(spells) do
+        local spellEntry = CreateFrame("Button", nil, scrollChild, "BackdropTemplate")
+        spellEntry:SetSize(240, 40)
+        spellEntry:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, - (i - 1) * 35)
+        spellEntry:SetBackdrop({
+            bgFile = "Interface/DialogFrame/UI-DialogBox-Background",
+            --edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
+            tile = true, tileSize = 16, edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 }
+        })
+
+        -- Spell Icon within the entry
+        local spellIcon = spellEntry:CreateTexture(nil, "ARTWORK")
+        spellIcon:SetSize(24, 24)
+        spellIcon:SetPoint("LEFT", spellEntry, "LEFT", 10, 0)
+        spellIcon:SetTexture("interface\\icons\\" ..spell.Icon)
+        -- spellIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92) -- Crop the edges to fit nicely
+
+        -- Spell Name
+        local spellName = spellEntry:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        spellName:SetPoint("LEFT", spellIcon, "RIGHT", 10, 0)
+        spellName:SetText(spell.Name)
+
+        -- Click to Edit Spell
+        spellEntry:SetScript("OnClick", function()
+            OpenSpellEditor(unitFrame, spell)
+        end)
+
+        -- Add entry to spell list
+        table.insert(frame.SpellEntries, spellEntry)
+    end
+
+    -- Add New Spell Button
+    local addSpellButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    addSpellButton:SetSize(150, 25)
+    addSpellButton:SetPoint("TOP", scrollFrame, "BOTTOM", 0, -10)
+    addSpellButton:SetText("New Spell")
+    addSpellButton:SetScript("OnClick", function()
+        OpenSpellEditor(unitFrame, nil) -- Open editor for a new spell
+    end)
+end
+
+
+function EditorFrame:PopulateSpellsTab()
+    self:UpdateSpellsTab()
+end
+
 
 -- Function to Populate Loot Tab
 local function PopulateLootTab()
@@ -575,7 +872,7 @@ end
 
 -- Populate Tabs
 PopulateStatisticsTab()
-PopulateSpellsTab()
+EditorFrame:PopulateSpellsTab()
 PopulateLootTab()
 
 local function ShowApplyButton()
@@ -598,13 +895,17 @@ local function ShowApplyButton()
         -- Store NPC ID
         unitFrame.NPCID = tonumber(EditorFrame.TabFrames[1].NPCIDInput:GetText()) or 17227
 
+        -- Calculate new current HP
+        local hpRatio = unitFrame.CurrentHealth / unitFrame.MaxHealth
+
+        -- Store Max HP
+        unitFrame.MaxHealth = tonumber(EditorFrame.TabFrames[1].MaxHPInput:GetText()) or 100
+        unitFrame.CurrentHealth = hpRatio * unitFrame.MaxHealth
+
         -- Store NPC Position in Window
         unitFrame.ModelPosition["x"] = tonumber(EditorFrame.TabFrames[1].PositionWindow.XSlider:GetValue())
-        print("Model X Position: " ..unitFrame.ModelPosition["x"])
         unitFrame.ModelPosition["y"] = tonumber(EditorFrame.TabFrames[1].PositionWindow.YSlider:GetValue())
-        print("Model Y Position: " ..unitFrame.ModelPosition["y"])
         unitFrame.ModelPosition["z"] = tonumber(EditorFrame.TabFrames[1].PositionWindow.ZSlider:GetValue())
-        print("Model Z Position: " ..unitFrame.ModelPosition["z"])
 
 
         -- Store Ability Modifiers
@@ -627,30 +928,12 @@ local function ShowApplyButton()
         -- Store Defensive AC
         unitFrame.DefensiveAC = {}
         for stat, data in pairs(EditorFrame.TabFrames[1].DefensiveAC) do
-            unitFrame.DefensiveAC[stat] = data.value
+            unitFrame.DefensiveAC[stat] = data.value or 10
         end
 
-        -- Debug Print Output
-        print("Unit Frame Updated:", unitFrame.UnitName, "NPC ID:", unitFrame.NPCID)
-
-        print("Ability Modifiers:")
-        for ability, value in pairs(unitFrame.AbilityModifiers) do
-            print(" - " .. ability .. ": " .. value)
-        end
-
-        print("Offensive Modifiers:")
-        for stat, values in pairs(unitFrame.OffensiveModifiers) do
-            print(" - " .. stat .. ": " .. values.damageDice .. (values.attackBonus >= 0 and "+" or "") .. values.attackBonus .. " | DC " ..values.ac.. " | School: " ..values.school)
-        end
-
-        print("Defensive AC:")
-        for stat, value in pairs(unitFrame.DefensiveAC) do
-            print(" - " .. stat .. " AC: " .. value)
-        end
 
         -- Send the sync message
-        print("Sending sync message...")
-        UnitFrames:Sync_UnitFrame(unitFrame)
+        Broadcast:SyncUnitFrame(unitFrame)
 
         -- Close the editor after applying changes
         EditorFrame:Hide()
@@ -703,8 +986,8 @@ local function UpdatePositionSlider(frame, unitFrame)
     frame.PositionWindow.YSlider:SetValue(unitFrame.ModelPosition["y"])
     frame.PositionWindow.ZSlider:SetValue(unitFrame.ModelPosition["z"])
 
-    print(string.format("Updating position: X: %.1f, Y: %.1f, Z: %.1f", 
-        unitFrame.ModelPosition["x"], unitFrame.ModelPosition["y"], unitFrame.ModelPosition["z"]))
+    --print(string.format("Updating position: X: %.1f, Y: %.1f, Z: %.1f", 
+    --    unitFrame.ModelPosition["x"], unitFrame.ModelPosition["y"], unitFrame.ModelPosition["z"]))
 
     -- Ensure PortraitPreviewWindow and PositionWindow are initialized
     if PortraitPreviewWindow and PortraitPreviewWindow.PortraitPreview then
@@ -738,13 +1021,17 @@ function UnitFrameEditor:ShowEditor(unitFrame)
     unitFrame.DefensiveAC = unitFrame.DefensiveAC or {}
 
     -- Update existing input fields with data from unitFrame
-    EditorFrame.TabFrames[1].NameInput:SetText(unitFrame.NPCName or "")
-    EditorFrame.TabFrames[1].NPCIDInput:SetText(unitFrame.NPCID or "")
+    EditorFrame.TabFrames[1].NameInput:SetText(unitFrame.NPCName or "Unit Name")
+    EditorFrame.TabFrames[1].NPCIDInput:SetText(unitFrame.NPCID or "17227")
+    EditorFrame.TabFrames[1].MaxHPInput:SetText(unitFrame.MaxHealth or "100")
+
 
     -- Update the Ability Modifiers, Offensive Modifiers, and Defensive AC sections
     UpdateAbilityModifiers(EditorFrame.TabFrames[1], unitFrame)
     UpdateOffensiveModifiers(EditorFrame.TabFrames[1], unitFrame)
     UpdateDefensiveAC(EditorFrame.TabFrames[1], unitFrame)
+
+    EditorFrame:PopulateSpellsTab()
 
     -- Ensure the editor is visible
     EditorFrame:Show()
@@ -759,9 +1046,8 @@ function UnitFrameEditor:ShowEditor(unitFrame)
 
     -- Now update the sliders and the portrait preview
     UpdatePositionSlider(EditorFrame.TabFrames[1], unitFrame)
-
     -- Debug messages for confirming initialization
-    print("Opening Unit Frame Editor for:", unitFrame.NPCName, "\nModel ID:", unitFrame.NPCID)
+    -- print("Opening Unit Frame Editor for:", unitFrame.NPCName, "\nModel ID:", unitFrame.NPCID)
 end
 
 

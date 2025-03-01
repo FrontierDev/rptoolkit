@@ -1,0 +1,40 @@
+## Interface: 110005
+## Title: RPToolkit
+## Notes: Fully-integrated 5e-based roll system and associated RP event tools.
+## Version: 0.2.2-a
+## Author: Ortellus @ Argent Dawn (Discord: ortellus)
+## SavedVariables: CampaignToolkitProfilesDB,CampaignToolkitCampaignsDB,PlayerSettingsDB
+
+SpellFunctions.lua
+
+Common.lua
+
+TalkingHeadSender.lua
+TalkingHeadInterface.lua
+CombatLog.lua
+Targeting.lua
+TurnTracker.lua
+Spellbook.lua
+CTAuraEffect.lua
+CTAura.lua
+CTSpell.lua
+PlayerTurn.lua
+PlayerReaction.lua
+Equipment.lua
+CTCampaign.lua
+CampaignManager.lua
+CampaignToolkitProfiles.lua
+CharacterSheet.lua
+Profile/CharacterSetup.lua
+Dice.lua
+UnitFrames.lua
+UFSpell.lua
+UnitFrameTurn.lua
+UnitFrameInspect.lua
+UnitFrameEditor.lua
+ModelList.lua
+
+Comms/CommBroadcast.lua
+Comms/CommHandle.lua
+Comms/CommRequest.lua
+

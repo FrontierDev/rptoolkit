@@ -14,6 +14,8 @@ local STAT_NAME_MAPPING = {
     healthRegen = "HealthRegen",
     speed = "Speed",
     concentration = "Concentration",
+    proficiency = "Proficiency",
+    criticalDamage = "CriticalStrikeDamage",
 
     -- ✅ Combat Stats (Melee, Ranged, Spell, etc.)
     meleeHit = "Melee.hit",
@@ -106,6 +108,8 @@ local STAT_TOOLTIP_MAP = {
     healthRegen = "Health per Turn",
     speed = "Movement Range",
     concentration = "Concentration",
+    proficiency = "Proficiency Bonus",
+    criticalDamage = "% Critical Damage",
 
     -- ✅ Combat Stats
     meleeHit = "Melee Hit Rating",
@@ -118,7 +122,7 @@ local STAT_TOOLTIP_MAP = {
     spellBonus = "Spell Power",
     spellCrit = "Spell Critical Strike",
     hasteBonus = "Haste Rating",
-    healCrit = "Healing Critical Strike",
+    healCrit = "Critical Heal",
     healBonus = "Bonus Healing",
     dodgeBonus = "Dodge Rating",
     dodgeCrit = "Critical Dodge",
@@ -126,6 +130,9 @@ local STAT_TOOLTIP_MAP = {
     parryCrit = "Critical Parry",
     blockBonus = "Block Rating",
     blockCrit = "Critical Block",
+    hasteHit = "Haste Hit Rating",
+    hasteBonus = "Haste Attack Power",
+    hasteCrit = "Haste Critical Strike",
 
     -- ✅ Resistances
     fireResistMod = "Fire Resistance",
@@ -294,107 +301,100 @@ function Equipment:AddDefaultItems()
 
     -- **Weapons**
     self:AddItem({
-        name = "Sword of Orman",
-        quality = "Heroic",
+        name = "Steel Sword",
+        quality = "Common",
         category = "Main Hand",
         subtype = "Sword",
-        icon = "Interface\\Icons\\INV_Sword_04",
-        damageDice = "1d10",
+        icon = "Interface\\Icons\\inv_sword_1h_newplayer_a_03",
+        damageDice = "1d8",
         damageModifier = "meleeBonus",
-        damageMin = "1", damageMax = "10",
-        handedness = "One-Handed",
+        damageMin = "1", damageMax = "8",
+        handedness = "One-handed",
         actionType = "Action",
-        effects = { STR = 3, holyCrit = 5, meleeHit = 2, fireResistMit = 5, fireResistMod = 2 },
-        equipEffects = { "Equip: Increases attack speed by 10%" },
-        gemSockets = "Red, Red, Red",
-        socketBonus = "+1 Melee Attack Power",
-        enchant = "Fiery Weapon",
-        flavorText = "Forged in the flames of battle."
+        effects = { meleeHit = 1, meleeBonus = 1 },
+        equipEffects = { }
     })
 
     self:AddItem({
-        name = "Dragon Slayer Axe",
-        version = "Mythic",
-        quality = "Legendary",
-        category = "Off Hand",
-        subtype = "Axe",
-        icon = "Interface\\Icons\\INV_Axe_06",
-        damageDice = "2d6",
+        name = "Steel Greatsword",
+        quality = "Common",
+        category = "Main Hand",
+        subtype = "Sword",
+        icon = "Interface\\Icons\\inv_sword_2h_newplayer_a_02",
+        damageDice = "1d10",
         damageModifier = "meleeBonus",
-        handedness = "Two-Handed",
+        damageMin = "1", damageMax = "10",
+        handedness = "Two-handed",
         actionType = "Action",
-        effects = { STR = 5, meleeHit = 3, meleeCrit = 2 },
-        equipEffects = { "Equip: Increases damage against dragons by 15%" },
-        enchant = "Crusader",
-        flavorText = "Axe of the last Dragonlord."
+        effects = { meleeHit = 1, meleeBonus = 1 },
+        equipEffects = { }
+    })
+
+    self:AddItem({
+        name = "Steel Companion",
+        quality = "Common",
+        category = "Off Hand",
+        subtype = "Dagger",
+        icon = "Interface\\Icons\\inv_knife_1h_newplayer_a_02",
+        damageDice = "1d6",
+        damageModifier = "meleeBonus",
+        handedness = "One-handed",
+        actionType = "Bonus Action",
+        effects = { hasteHit = 1, hasteBonus = 1 }
+    })
+
+        self:AddItem({
+        name = "Hunting Longbow",
+        quality = "Common",
+        category = "Main Hand",
+        subtype = "Bow",
+        icon = "Interface\\Icons\\inv_bow_1h_newplayer_a_01",
+        damageDice = "2d6",
+        damageModifier = "rangedBonus",
+        handedness = "Ranged",
+        actionType = "Action",
+        effects = { rangedHit = 1, rangedBonus = 1 }
     })
 
     -- **Armor**
     self:AddItem({
-        name = "Plate of the Fallen King",
-        version = "Mythic",
-        quality = "Legendary",
+        name = "Steel Platemail",
+        quality = "Common",
         category = "Chest",
         subtype = "Plate",
-        armorValue = 500, -- ✅ NEW: Armor value
-        icon = "Interface\\Icons\\INV_Chest_Plate06",
-        effects = { CON = 5, fireResistMit = 8, blockBonus = 4, maxHealth = 10 },
-        equipEffects = { "Equip: Reduces damage taken by 5%" },
-        gemSockets = "Red",
-        flavorText = "Worn by the last king before the cataclysm."
-    })
-
-    self:AddItem({
-        name = "Enchanted Robes",
-        version = "Heroic",
-        quality = "Epic",
-        category = "Chest",
-        subtype = "Cloth",
-        armorValue = 100, -- ✅ NEW: Armor value
-        icon = "Interface\\Icons\\INV_Chest_Cloth_38",
-        effects = { INT = 5, spellHit = 2, fireBonus = 1 },
-        equipEffects = { "Equip: Restores 2 mana per second" },
-        flavorText = "Imbued with arcane energy from another realm."
+        armorValue = 3, -- ✅ NEW: Armor value
+        icon = "Interface\\Icons\\inv_plate_startinggear_a_01_chest"
     })
 
     -- **Shields**
     self:AddItem({
-        name = "Aegis of the Guardian",
-        version = "Legendary",
-        quality = "Epic",
+        name = "Steel Shield",
+        quality = "Common",
         category = "Shield",
         subtype = "Shield",
-        icon = "Interface\\Icons\\INV_Shield_06",
-        deflectionValue = 250, -- ✅ NEW: Deflection value
-        effects = { blockBonus = 6, fireResistMit = 5 },
-        equipEffects = { "Equip: Reflects 10% of melee damage taken." },
-        gemSockets = "Red",
-        flavorText = "A shield carried by the immortal guardians."
+        icon = "Interface\\Icons\\inv_shield_1h_newplayer_a_01",
+        deflectionValue = 1, -- ✅ NEW: Deflection value
+        effects = { blockBonus = 1 }
     })
 
     -- **Trinkets**
     self:AddItem({
-        name = "Orb of Infinite Knowledge",
-        version = "Epic",
-        quality = "Rare",
+        name = "Blessed Icon",
+        quality = "Common",
         category = "Trinket",
-        icon = "Interface\\Icons\\INV_Misc_Orb_04",
-        effects = { INT = 6, spellCrit = 3 },
-        equipEffects = { "Equip: Increases mana pool by 10%" },
-        flavorText = "Contains the wisdom of a thousand scholars."
+        icon = "Interface\\Icons\\inv_misc_symbolofkings_01",
+        effects = { shadowResistMod = 1, shadowResistMit = 1 },
+        flavorText = "A Light-touched symbol to protect against the Void."
     })
 
     -- **Class Items**
     self:AddItem({
-        name = "Libram of Holy Light",
-        version = "Heroic",
-        quality = "Rare",
+        name = "Basic Prayer Book",
+        quality = "Common",
         category = "Class Item",
         subtype = "Libram",
-        icon = "Interface\\Icons\\INV_Relics_LibramofTruth",
-        effects = { healBonus = 5, holyResistMit = 3 },
-        equipEffects = { "Equip: Healing spells restore 5% more health." },
-        flavorText = "A sacred text carried by the devoted."
+        icon = "Interface\\Icons\\inv_misc_book_09",
+        effects = { shadowResistMit = 1, holyResistMit = 1 }
     })
 
     -- print("✅ Default items successfully added.")
@@ -641,10 +641,9 @@ function Equipment:ApplyItemEffects(item, apply)
 
             -- ✅ Update ability scores (stored only in _G.abilityTexts)
             if _G.abilityTexts[mappedKey] and _G.abilityTexts[mappedKey].score then
-                local currentScore = tonumber(_G.abilityTexts[mappedKey].score:GetText()) or 10
-                local newScore = currentScore + adjustedValue
-                _G.abilityTexts[mappedKey].score:SetText(newScore)  -- Update the ability score
-                -- print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t Updated Ability Score:", mappedKey, "Old:", currentScore, "New:", newScore)
+                local currentBonus = tonumber(_G.abilityBonusScores[mappedKey]) or 0
+                local newBonus = tonumber(currentBonus) + tonumber(adjustedValue)
+                _G.abilityBonusScores[mappedKey] = newBonus -- Update the ability score
             end
 
             -- ✅ Check if the item is modifying a skill (and apply modifier correctly)
@@ -676,14 +675,14 @@ function Equipment:ApplyItemEffects(item, apply)
             if mappedKey:match("^[A-Za-z]+%.[a-z]+") then
                 local statCategory, statType = mappedKey:match("([^%.]+)%.([^%.]+)")
                 
-                if statCategory and statType and _G.combatStats[statCategory] then
-                    local stat = _G.combatStats[statCategory][statType]
-                    -- print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t " ..stat)
+                if statCategory and statType and _G.combatStats[statCategory] and _G.combatStats[statCategory][statType] then
+                    local stat = _G.combatStatModifiers[statCategory][statType]
+                    --print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t " ..stat)
 
                     if stat then
                         local currentStatValue = stat or 0
-                        _G.combatStats[statCategory][statType] = currentStatValue + adjustedValue
-                        -- print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t Updated Combat Stat:", mappedKey, "Old:", currentStatValue, "New:", _G.combatStats[statCategory][statType])
+                        _G.combatStatModifiers[statCategory][statType] = currentStatValue + adjustedValue
+                        --print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t Updated Combat Stat:", mappedKey, "Old:", currentStatValue, "New:", _G.combatStatModifiers[statCategory][statType])
                     end
                 end
             end
@@ -740,7 +739,7 @@ function Equipment:ShowTooltip(slot)
     -- ✅ Item Name with Quality Color
     GameTooltip:AddLine(color .. item.name .. "|r")
 
-    if item.version then
+    if item.version and item.version ~= "Common" then
         GameTooltip:AddLine("|cffffff00" .. item.version .. "|r", 1, 1, 1, true)
     end
 

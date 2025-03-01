@@ -15,13 +15,15 @@ function SaveCharacterProfile()
 
     -- Ensure the profile exists for the current player
     _G.CampaignToolkitProfilesDB[key] = _G.CampaignToolkitProfilesDB[key] or {
-        AbilityScores = {},
+        AbilityBonusScores = {},
+        AbilityBaseScores = {},
         HiddenStatModifiers = {},
         Proficiencies = {},
         SkillModifiers = {},
-        CombatStats = {},
+        CombatStatModifiers = {},
         Resistances = {},
         EquippedItemGUIDs = {},
+        EquippedSpellGUIDs = {},
         Items = {},
     }
 
@@ -30,10 +32,13 @@ function SaveCharacterProfile()
     -- Save equipped item GUIDs
     profile.EquippedItemGUIDs = _G.equippedItemGUIDs  -- Save the list of equipped item GUIDs
 
+    -- Save equipped spell GUIDs
+    profile.EquippedSpellGUIDs = _G.equippedSpellGUIDs
+
     -- Save ability scores
     for ability, texts in pairs(_G.abilityTexts) do
-        local score = tonumber(texts.score:GetText()) or 10
-        profile.AbilityScores[ability] = score
+        profile.AbilityBonusScores[ability] = tonumber(_G.abilityBonusScores[ability]) or 10
+        profile.AbilityBaseScores[ability] = tonumber(_G.abilityBaseScores[ability]) or 10
     end
 
     -- Save skill modifiers
@@ -42,11 +47,12 @@ function SaveCharacterProfile()
     end
 
     -- Save combat stats
-    profile.combatStats = profile.combatStats or {}
-    for category, stats in pairs(_G.combatStats) do
-        profile.combatStats[category] = profile.combatStats[category] or {} -- Preserve existing data
+    profile.CombatStatModifiers = profile.CombatStatModifiers or {}
+    for category, stats in pairs(_G.combatStatModifiers) do
+        profile.CombatStatModifiers[category] = profile.CombatStatModifiers[category] or {} -- Preserve existing data
         for statType, statValue in pairs(stats) do
-            profile.combatStats[category][statType] = statValue or profile.combatStats[category][statType] or 0
+            profile.CombatStatModifiers[category][statType] = statValue or profile.CombatStatModifiers[category][statType] or 0
+            -- print("Save: " ..category.. " " ..statType.. " " ..profile.CombatStatModifiers[category][statType].. ", should be " ..statValue)
         end
     end
 
@@ -114,18 +120,25 @@ end
 function LoadCharacterProfile()
     local key = GetCharacterKey()
 
+    if not _G.CampaignToolkitProfilesDB then
+        print("|cffff00ff [RPT] First time initialisation...|r")
+        return
+    end
+
     -- ✅ Ensure `_G.CampaignToolkitProfilesDB` exists
     _G.CampaignToolkitProfilesDB = _G.CampaignToolkitProfilesDB or {}
 
     -- ✅ Ensure the profile exists but DO NOT OVERWRITE it if it already exists
     if not _G.CampaignToolkitProfilesDB[key] then
         _G.CampaignToolkitProfilesDB[key] = {
-            AbilityScores = { STR = 10, DEX = 10, CON = 10, INT = 10, WIS = 10, CHA = 10 },
+            AbilityBonusScores = {},
+            AbilityBaseScores = {},
             Proficiencies = {},
             SkillModifiers = {},
-            CombatStats = {},
+            CombatStatModifiers = {},
             Resistances = {},
             EquippedItemGUIDs = {},
+            EquippedSpellGUIDs = {},
             Items = {},  -- Ensure Items table exists
             HiddenStatModifiers = {} -- Ensure HiddenStatModifiers table exists
         }
@@ -133,20 +146,28 @@ function LoadCharacterProfile()
 
     -- ✅ Now safely reference the profile without resetting it
     local profile = _G.CampaignToolkitProfilesDB[key]
-    profile.AbilityScores = profile.AbilityScores or { STR = 10, DEX = 10, CON = 10, INT = 10, WIS = 10, CHA = 10 }
+    profile.AbilityBonusScores = profile.AbilityBonusScores or { STR = 0, DEX = 0, CON = 0, INT = 0, WIS = 0, CHA = 0 }
+    profile.AbilityBaseScores = profile.AbilityBaseScores or { STR = 10, DEX = 10, CON = 10, INT = 10, WIS = 10, CHA = 10 }
     profile.Proficiencies = profile.Proficiencies or {}
     profile.SkillModifiers = profile.SkillModifiers or {}
-    profile.CombatStats = profile.CombatStats or {}
     profile.Resistances = profile.Resistances or {}
     profile.Items = profile.Items or {}
     profile.HiddenStatModifiers = profile.HiddenStatModifiers or {}
+    profile.CombatStatModifiers = profile.CombatStatModifiers or {}
 
     -- ✅ Load ability scores
     for ability, texts in pairs(_G.abilityTexts) do
         if texts.score then
-            local storedScore = profile.AbilityScores[ability] or 10
-            texts.score:SetText(storedScore)
-            texts.mod:SetText((math.floor((storedScore - 10) / 2) >= 0 and "+" or "") .. math.floor((storedScore - 10) / 2))
+            local bonusScore = profile.AbilityBonusScores[ability] or 0
+            local baseScore = profile.AbilityBaseScores[ability] or 10
+
+            _G.abilityBaseScores[ability] = baseScore
+
+            _G.abilityBonusScores[ability] = bonusScore
+
+            local totalScore = bonusScore + baseScore
+
+            texts.mod:SetText((math.floor((totalScore - 10) / 2) >= 0 and "+" or "") .. math.floor((totalScore - 10) / 2))
         end
     end
 
@@ -164,20 +185,13 @@ function LoadCharacterProfile()
     end
 
     -- ✅ Load combat stats
-     for category, stats in pairs(_G.combatStats) do
-        profile.CombatStats[category] = profile.CombatStats[category] or {}
+     for category, stats in pairs(_G.combatStatModifiers) do
+        profile.CombatStatModifiers[category] = profile.CombatStatModifiers[category] or {}
         for statType, _ in pairs(stats) do
-            profile.CombatStats[category][statType] = profile.CombatStats[category][statType] or _G.combatStats[category][statType] or 0
+            profile.CombatStatModifiers[category][statType] = profile.CombatStatModifiers[category][statType] or 0
+            _G.combatStatModifiers[category][statType] = profile.CombatStatModifiers[category][statType] or 0
         end
     end
-
-    for category, stats in pairs(profile.CombatStats) do
-        for statType, statValue in pairs(stats) do
-            _G.combatStats[category] = _G.combatStats[category] or {}
-            _G.combatStats[category][statType] = statValue
-        end
-    end
-
 
     -- ✅ Load resistances
     for resist, stats in pairs(_G.resistances) do
@@ -229,6 +243,7 @@ function LoadCharacterProfile()
 
     -- ✅ Load Equipped Items
     _G.equippedItemGUIDs = profile.EquippedItemGUIDs or {}
+    _G.equippedSpellGUIDs = profile.EquippedSpellGUIDs or {}
 
     -- ✅ Step 1: Remove all equipped item effects first to prevent stacking
     if _G.equippedItemGUIDs and Equipment and Equipment.ApplyItemEffects then
@@ -239,14 +254,6 @@ function LoadCharacterProfile()
                     Equipment:ApplyItemEffects(item, false)  -- Remove previous effects
                 end
             end
-        end
-    end
-
-    -- ✅ Step 2: Load profile data (restore AbilityScores, CombatStats, etc.)
-    for category, stats in pairs(profile.CombatStats) do
-        for statType, statValue in pairs(stats) do
-            _G.combatStats[category] = _G.combatStats[category] or {}
-            _G.combatStats[category][statType] = statValue
         end
     end
 
@@ -272,6 +279,7 @@ function LoadCharacterProfile()
         
     -- Select which items are already equipped.
     Equipment:LoadEquippedItems()
+    Spellbook:LoadEquippedSpells()
 
     -- ✅ If no items were loaded, add default items
     if not _G.items or #_G.items == 0 then

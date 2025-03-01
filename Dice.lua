@@ -64,8 +64,6 @@ function Dice.RequestRoll(playerID, modifier, rollName, rollGuid)
     -- Send the message to all players in the group
     local channel = IsInRaid() and "RAID" or "PARTY"
     C_ChatInfo.SendAddonMessage("CTDICE", rollMessage, channel)
-    print("[Dice] Sent roll request:", rollMessage)
-
     return rollGuid
 end
 
@@ -134,9 +132,9 @@ function Dice.Roll(dice, rollName, modifierTypes, silent, display)
                 -- Check if we have a valid value, and convert it to a number if possible
                 if skillTextValue then
                     modifier = modifier + tonumber(skillTextValue) or modifier + 0  -- Convert the text value to a number (default to 0 if invalid)
-                    print("Found skill modifier from UI: " .. mappedModifierType .. " = " .. modifier)
+                    -- print("Found skill modifier from UI: " .. mappedModifierType .. " = " .. modifier)
                 else
-                    print("No value found for skill modifier: " .. mappedModifierType)
+                    -- print("No value found for skill modifier: " .. mappedModifierType)
                 end
             elseif _G.hiddenStats and _G.hiddenStats[mappedModifierType] then
                 modifier = modifier + _G.hiddenStats[mappedModifierType]
@@ -152,16 +150,16 @@ function Dice.Roll(dice, rollName, modifierTypes, silent, display)
                         modifier = modifier + _G.combatStats[statType][statName] or modifier + 0
                         found = true
                     else
-                        print("No combat stat modifier found for " .. mappedModifierType)
+                        -- print("No combat stat modifier found for " .. mappedModifierType)
                     end
                 else
-                    print("Invalid format for combatStats: " .. mappedModifierType)
+                    -- print("Invalid format for combatStats: " .. mappedModifierType)
                 end
             end
 
             if _G.resistances and not found then
                 -- Check if the modifier exists in the combatStats table (nested structure)
-                print("Searching for modifier in resistances...")
+                -- print("Searching for modifier in resistances...")
 
                 local statType, statName = mappedModifierType:match("^(%a+)%.(%a+)$")  -- Try to extract type and stat (e.g., Melee.bonus)
                 if statType and statName then
@@ -170,19 +168,19 @@ function Dice.Roll(dice, rollName, modifierTypes, silent, display)
                         modifier = modifier + _G.resistanceFrames[statType][statName]:GetText()
                         found = true
                     else
-                        print("No resistance modifier found for " .. mappedModifierType)
+                        -- print("No resistance modifier found for " .. mappedModifierType)
                     end
                 else
-                    print("Invalid format for resistances: " .. mappedModifierType)
+                    -- print("Invalid format for resistances: " .. mappedModifierType)
                 end        
             else
-                print("No modifier found for mapped type: " .. mappedModifierType)
+                -- print("No modifier found for mapped type: " .. mappedModifierType)
             end
         else
-            print("Modifier type not found in STAT_NAME_MAPPING: " .. modifierType)
+            -- print("Modifier type not found in STAT_NAME_MAPPING: " .. modifierType)
         end
     elseif type(modifierTypes) == "table" then
-        print("Multiple modifiers detected...")
+        -- print("Multiple modifiers detected...")
 
         for _, modifierType in ipairs(modifierTypes) do
             -- Use STAT_NAME_MAPPING to get the corresponding modifier
@@ -201,9 +199,9 @@ function Dice.Roll(dice, rollName, modifierTypes, silent, display)
                     -- Check if we have a valid value, and convert it to a number if possible
                     if skillTextValue then
                         modifier = modifier + tonumber(skillTextValue) or modifier + 0  -- Convert the text value to a number (default to 0 if invalid)
-                        print("Found skill modifier from UI: " .. mappedModifierType .. " = " .. modifier)
+                        -- print("Found skill modifier from UI: " .. mappedModifierType .. " = " .. modifier)
                     else
-                        print("No value found for skill modifier: " .. mappedModifierType)
+                        -- print("No value found for skill modifier: " .. mappedModifierType)
                     end
                 elseif _G.hiddenStats and _G.hiddenStats[mappedModifierType] then
                     modifier = modifier + _G.hiddenStats[mappedModifierType]
@@ -219,16 +217,16 @@ function Dice.Roll(dice, rollName, modifierTypes, silent, display)
                             modifier = modifier + _G.combatStats[statType][statName] or modifier + 0
                             found = true
                         else
-                            print("No combat stat modifier found for " .. mappedModifierType)
+                            -- print("No combat stat modifier found for " .. mappedModifierType)
                         end
                     else
-                        print("Invalid format for combatStats: " .. mappedModifierType)
+                        -- print("Invalid format for combatStats: " .. mappedModifierType)
                     end
                 end
 
                 if _G.resistances and not found then
                     -- Check if the modifier exists in the combatStats table (nested structure)
-                    print("Searching for modifier in resistances...")
+                    -- print("Searching for modifier in resistances...")
 
                     local statType, statName = mappedModifierType:match("^(%a+)%.(%a+)$")  -- Try to extract type and stat (e.g., Melee.bonus)
                     if statType and statName then
@@ -237,22 +235,22 @@ function Dice.Roll(dice, rollName, modifierTypes, silent, display)
                             modifier = modifier + _G.resistanceFrames[statType][statName]:GetText()
                             found = true
                         else
-                            print("No resistance modifier found for " .. mappedModifierType)
+                            -- print("No resistance modifier found for " .. mappedModifierType)
                         end
                     else
-                        print("Invalid format for resistances: " .. mappedModifierType)
+                        -- print("Invalid format for resistances: " .. mappedModifierType)
                     end        
                 else
-                    print("No modifier found for mapped type: " .. mappedModifierType)
+                    -- print("No modifier found for mapped type: " .. mappedModifierType)
                 end
             else
-                print("Modifier type not found in STAT_NAME_MAPPING: " .. modifierType)
+                -- print("Modifier type not found in STAT_NAME_MAPPING: " .. modifierType)
             end
         end
     end
 
     if not num or not sides then
-        print("Invalid dice format:", dice)
+        -- print("Invalid dice format:", dice)
         return 0
     end
 
@@ -261,13 +259,10 @@ function Dice.Roll(dice, rollName, modifierTypes, silent, display)
         baseRoll = baseRoll + math.random(1, sides)
     end
 
-    print(baseRoll)
-
     -- Only send the message and show floating text if not silent
     if not Dice.silent then
         Dice.SendRollMessage(UnitName("player"), rollName or "Roll", dice, modifier, baseRoll)
 
-        print (displayType)
         if displayType == "ALL" then
             local displayText = string.format("%s %d", rollName or "Roll", baseRoll + modifier)
             CreateFloatingText(displayText)
@@ -279,7 +274,7 @@ function Dice.Roll(dice, rollName, modifierTypes, silent, display)
         end
     end
 
-    return baseRoll + modifier
+    return baseRoll + modifier, baseRoll
 end
 
 
@@ -288,15 +283,15 @@ end
 function Dice.PrintRollResults(rollGUID)
     -- Check if the rollGUID exists in the rollResults table
     if Dice.rollResults[rollGUID] then
-        print(string.format("Results for Roll GUID: %s", rollGUID))
+        -- print(string.format("Results for Roll GUID: %s", rollGUID))
 
         -- Iterate through each player and print their result
         for playerName, result in pairs(Dice.rollResults[rollGUID]) do
-            print(string.format("  %s rolled: %d", playerName, result))
+            -- print(string.format("  %s rolled: %d", playerName, result))
         end
     else
         -- If the rollGUID doesn't exist, print a message indicating no results
-        print(string.format("No results found for Roll GUID: %s", rollGUID))
+        -- print(string.format("No results found for Roll GUID: %s", rollGUID))
     end
 end
 
@@ -307,8 +302,8 @@ function Dice.SendRollMessage(playerName, rollType, dice, modifier, baseRoll)
 
     local total = baseRoll + modifier
     local rollMessage = string.format(
-        "|cffffff00[%s]|r %s rolled %s: %d + %d = |cff00ff00%d|r",
-        rollType, playerName, dice, baseRoll, modifier, total
+        "ROLLED:%s rolled %s: %d + %d = %d",
+        playerName, rollType, baseRoll, modifier, total
     )
 
     -- Determine the appropriate channel
@@ -319,17 +314,12 @@ function Dice.SendRollMessage(playerName, rollType, dice, modifier, baseRoll)
         chatChannel = "WHISPER"
     end
 
-    -- Debug: Print message before sending
-    print("📢 Sending Roll Message:", rollMessage, "via", chatChannel)
-
     -- Send addon message with proper formatting
     C_ChatInfo.SendAddonMessage("CTDICE", rollMessage, chatChannel)
 end
 
 local function OnAddonMessage(self, event, prefix, message, _, sender)
     if prefix ~= "CTDICE" then return end  -- Ignore unrelated messages
-
-    print(message)
 
     -- Determine the appropriate channel
     local chatChannel = "PARTY"
@@ -339,18 +329,23 @@ local function OnAddonMessage(self, event, prefix, message, _, sender)
         chatChannel = "WHISPER"
     end
 
+    -- Handle non-requested roll result.
+    if string.sub(message, 1, 6) == "ROLLED"  and sender ~= UnitName("player") then
+        CombatLog:PrintRollMessage(string.sub(message, 8))
+    end
+
     -- Handle roll request
     if string.sub(message, 1, 12) == "ROLL_REQUEST" then
         local event, modifierType, playerID, rollName, rollGuid = strsplit(":", message)
     
         -- Debug print to verify the parsed message
-        print("Event: " .. event)
-        print("Modifier Type: " .. modifierType)
-        print("PlayerID: " .. playerID)
-        print("Roll GUID: " .. rollGuid)
+        --print("Event: " .. event)
+        --print("Modifier Type: " .. modifierType)
+        --print("PlayerID: " .. playerID)
+        --print("Roll GUID: " .. rollGuid)
 
         if not Dice.rollResults[rollGuid] then
-            print("Received request for roll " .. rollGuid .. " and initialised storage.")
+            --print("Received request for roll " .. rollGuid .. " and initialised storage.")
             Dice.rollResults[rollGuid] = {}
         end
 
@@ -369,14 +364,14 @@ local function OnAddonMessage(self, event, prefix, message, _, sender)
         local event, playerID, result, rollGuid = strsplit(":", message)
         result = tonumber(result)
         -- Process the result as needed, e.g., display in the UI or log it
-        print(string.format("ROLL_RESULT (%s): %s rolled %d", rollGuid, playerID, result))
+        --print(string.format("ROLL_RESULT (%s): %s rolled %d", rollGuid, playerID, result))
 
         -- Store the result in the rollResults table
         if Dice.rollResults[rollGuid] then
-            print("Roll stored to " ..rollGuid)
+            --print("Roll stored to " ..rollGuid)
             Dice.rollResults[rollGuid][playerID] = result
         else
-            print("No roll found with GUID:", rollGuid)
+            --print("No roll found with GUID:", rollGuid)
         end
     end
 end

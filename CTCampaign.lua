@@ -9,25 +9,30 @@ local function GenerateGUID()
     return string.format("G%d-%d", time() % 100000, math.random(1000, 9999))
 end
 
--- Function to save campaign to database in WTF folder
-function CTCampaign:SaveCampaign()
-    if not self.Guid then
-        print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t ❌ Error: Cannot save campaign with no GUID.")
+-- Function to Save a Campaign
+function CTCampaign:SaveCampaign(guid, data)
+    if not guid then
+        print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t ❌ Error: Cannot save campaign without a GUID.")
         return
     end
 
     -- Ensure the global database exists
-    _G.CampaignToolkitCampaignsDB[self.Guid] = {
-        Name = self.Name,
-        Author = self.Author,
-        Guid = self.Guid or GenerateGUID(),
-        Icon = self.Icon or "interface/icons/inv_misc_questionmark",
+    _G.CampaignToolkitCampaignsDB[guid] = {
+        Name = data.Name or "Unknown Campaign",
+        Author = data.Author or "Unknown Author",
+        Guid = guid, -- Ensure GUID is stored properly
+        Icon = data.Icon or "interface/icons/inv_misc_questionmark",
         LastUpdated = GetServerTime(),
-        SpellList = self.SpellList or {},
-        AuraList = self.AuraList or {},
-        Description = self.Description
+        SpellList = data.SpellList or {},
+        AuraList = data.AuraList or {},
+        Description = data.Description or "",
+        Parent = data.Parent or "Miscellaneous",
+        MarkForDeletion = data.MarkForDeletion or false
     }
+
+    print("    |cff00ff00[RPT] Saved campaign|r:", data.Name, ", GUID:", guid)
 end
+
 
 -- Function to count the number of campaigns in _G.Campaigns
 local function CountCampaigns()
@@ -39,47 +44,94 @@ local function CountCampaigns()
 end
 
 -- Function to load a campaign from the database
-function CTCampaign:LoadCampaign(campaignGuid)
-    if not _G.CampaignToolkitCampaignsDB[campaignGuid] then
-        print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t ❌ Error: Campaign with GUID '" .. campaignGuid .. "' not found!")
+function CTCampaign:LoadCampaign(guid)
+    if not _G.CampaignToolkitCampaignsDB or not _G.CampaignToolkitCampaignsDB[guid] then
+        print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t ❌ Error: Campaign with GUID '" .. guid .. "' not found!")
+        return nil
+    end
+
+    -- Return a copy of the stored campaign data
+    local campaignData = CopyTable(_G.CampaignToolkitCampaignsDB[guid])
+
+    -- Load spells from the campaign.
+    Spellbook:LoadSpellsFromCampaign(guid)
+
+    return campaignData
+end
+
+
+function CTCampaign:SetData(data)
+    if not data or not data.Guid then
+        print("|cffff0000Error: Cannot set data without a valid GUID.|r")
         return
     end
 
-    local data = _G.CampaignToolkitCampaignsDB[campaignGuid]
-    self:SetData(data)
+    local guid = data.Guid
 
-    -- Add the loaded campaign to _G.Campaigns
-    _G.Campaigns[campaignGuid] = self
+    -- Ensure campaign exists in memory
+    _G.Campaigns[guid] = _G.Campaigns[guid] or {}
 
-    -- print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t Loaded campaign: " .. self.Name .. " | Number of campaigns: " .. CountCampaigns())  -- Corrected to use CountCampaigns
-
-    -- Load spells from this campaign.
-    Spellbook:LoadSpellsFromCampaign(campaignGuid)
-    Spellbook:UpdateSpellbookUI()
-end
-
--- Function to set campaign data
-function CTCampaign:SetData(data)
-    self.Name = data.Name or "Unknown Campaign"
-    self.Guid = data.Guid or GenerateGUID()
-    self.Author = data.Author or "Unknown Author"
-    self.LastUpdated = data.LastUpdated or GetServerTime()
-    self.SpellList = data.SpellList or {}
-    self.AuraList = data.AuraList or {}
-    self.Icon = data.Icon or "interface/icons/inv_misc_questionmark"
-    self.Description = data.Description
-
-    CTCampaign:SaveCampaign() -- Automatically save after setting data
-end
-
--- Function to get a list of saved campaigns
-function CTCampaign:GetSavedCampaigns()
-    local campaignGuids = {}
-    for Guid, _ in pairs(_G.CampaignToolkitCampaignsDB) do
-        table.insert(campaignGuids, Guid)
+    -- Copy new data into memory
+    for k, v in pairs(data) do
+        _G.Campaigns[guid][k] = v
     end
-    return campaignGuids
+
+    -- Ensure the database exists before saving
+    _G.CampaignToolkitCampaignsDB[guid] = _G.CampaignToolkitCampaignsDB[guid] or {}
+
+    -- Save to persistent storage
+    _G.CampaignToolkitCampaignsDB[guid] = CopyTable(_G.Campaigns[guid])
+
+    -- Ensure SaveCampaign exists before calling
+    if CTCampaign.SaveCampaign then
+        CTCampaign:SaveCampaign(guid, _G.Campaigns[guid])
+    else
+        print("|cffff0000Error: SaveCampaign function not found in CTCampaign.|r")
+    end
+
+    print("|cff00ff00Campaign data successfully updated for:|r " .. _G.Campaigns[guid].Name)
 end
+
+
+
+function CTCampaign:GetSavedCampaigns()
+    local campaignList = {}
+
+    if not _G.CampaignToolkitCampaignsDB then 
+        return
+    end
+
+    for guid, campaign in pairs(_G.CampaignToolkitCampaignsDB) do
+        if not campaign.MarkForDeletion then
+            table.insert(campaignList, guid)
+        end
+    end
+
+    return campaignList
+end
+
+function CTCampaign:CreateNewCampaign(name, author, icon, description)
+    local guid = GenerateGUID()
+
+    local newCampaign = {
+        Name = name or "New Campaign",
+        Author = author or UnitName("player"),
+        Guid = guid,
+        Icon = icon or "interface/icons/inv_misc_questionmark",
+        LastUpdated = GetServerTime(),
+        SpellList = {},
+        AuraList = {},
+        Description = description or "",
+        Parent = "Miscellaneous",
+        MarkForDeletion = false
+    }
+
+    -- Save Campaign to Database
+    CTCampaign:SaveCampaign(guid, newCampaign)
+
+    return guid
+end
+
 
 -- Hook campaign saving to game events (similar to profile saving)
 local eventFrame = CreateFrame("Frame")
@@ -88,8 +140,8 @@ eventFrame:RegisterEvent("PLAYER_LEAVING_WORLD") -- Ensures save on reload
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD") -- Ensures data is available on login
 eventFrame:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_LOGOUT" or event == "PLAYER_LEAVING_WORLD" then
-        if CTCampaign.Guid ~= "NONE" then
-            CTCampaign:SaveCampaign()
+        if not CTCampaign.MarkedForDeletion then
+            -- CTCampaign:SaveCampaign()
         end
     end
 

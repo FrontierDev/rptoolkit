@@ -30,15 +30,15 @@ local function CreateUnitFrame(index)
     frame.MaxActions = 2
 
     frame.OffensiveModifiers = {
-        Melee = { attackBonus = 0, damageDice = "1d6", ac = 15, school = "Physical" },
-        Ranged = { attackBonus = 0, damageDice = "1d8", ac = 15, school = "Physical" },
-        Spell = { attackBonus = 0, damageDice = "1d10", ac = 15, school = "Arcane" },
+        Melee = { attackBonus = 0, damageDice = "1d6", ac = 12, school = "Physical" },
+        Ranged = { attackBonus = 0, damageDice = "1d8", ac = 12, school = "Physical" },
+        Spell = { attackBonus = 0, damageDice = "1d10", ac = 12, school = "Arcane" },
     }
 
     frame.DefensiveAC = {
-        Melee = 15,
-        Ranged = 15,
-        Spell = 15
+        Melee = 10,
+        Ranged = 10,
+        Spell = 10
     }
 
     frame.Auras = {}
@@ -187,6 +187,7 @@ local function CreateUnitFrame(index)
             auraFrame.Guid = aura.Guid
             auraFrame.Caster = aura.Caster
             auraFrame.RemainingTurns = aura.RemainingTurns
+            auraFrame.Effects = aura.Effects
 
             -- Save aura in the frame's Auras table
             table.insert(frame.Auras, auraFrame)
@@ -278,29 +279,76 @@ local function CreateUnitFrame(index)
     frame.EditButton:SetNormalTexture("Interface/Buttons/UI-OptionsButton")  -- Blizzard's Gear Icon
     frame.EditButton:Hide()  -- Hidden by Default
 
-    -- Function to Check if the Button Should Be Shown
-    local function UpdateEditButtonVisibility()
-        local isLeader = UnitIsGroupLeader("player") or not IsInGroup()
-        if isLeader then
-            frame.EditButton:Show()
-        else
-            frame.EditButton:Hide()
-        end
-    end
-
     -- Click Event for Edit Button (Opens the Unit Frame Editor)
     frame.EditButton:SetScript("OnClick", function(self)
         UnitFrameEditor:ShowEditor(frame)
     end)
 
+    -- Add a button above the editor button for applying damage or healing
+    frame.ModifyHealthButton = CreateFrame("Frame", nil, frame)
+    frame.ModifyHealthButton:SetSize(20, 20)
+    frame.ModifyHealthButton:SetPoint("BOTTOM", frame.EditButton, "TOP", 0, -38)
+    
+    frame.ModifyHealthButton.Texture = frame.ModifyHealthButton:CreateTexture(nil, "ARTWORK")
+    frame.ModifyHealthButton.Texture:SetAllPoints()
+    frame.ModifyHealthButton.Texture:SetTexture("Interface/Icons/delves-scenario-heart-icon")
+    frame.ModifyHealthButton.Texture:SetVertexColor(0.8, 0.6, 0.6)
 
-    -- Check on Load and Register Events
-    UpdateEditButtonVisibility()
-    frame:RegisterEvent("GROUP_ROSTER_UPDATE")
-    frame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    frame:SetScript("OnEvent", function(self, event)
-        UpdateEditButtonVisibility()
+    frame.ModifyHealthButton:EnableMouse(true)
+    frame.ModifyHealthButton:SetScript("OnEnter", function()
+        if UnitIsGroupLeader("player") then frame.ModifyHealthButton.Texture:SetVertexColor(1, 0.8, 0.8) end -- Highlight color on hover
     end)
+    
+    frame.ModifyHealthButton:SetScript("OnLeave", function()
+        if UnitIsGroupLeader("player") then frame.ModifyHealthButton.Texture:SetVertexColor(0.8, 0.6, 0.6) end -- Revert to default color
+    end)
+
+    frame.ModifyHealthButton:SetScript("OnMouseDown", function()
+        if not UnitIsGroupLeader("player") then return end
+
+        StaticPopupDialogs["MODIFY_UNIT_HEALTH"] = {
+            text = "Enter damage/healing done:",
+            button1 = "Damage",
+            button2 = "Heal",
+            hasEditBox = true,
+            OnAccept = function(self)
+                local amount = tonumber(self.editBox:GetText())
+                if amount and amount > 0 then
+                    frame.CurrentHealth = math.max(frame.CurrentHealth - amount, 0)
+                    frame.HealthBar:SetValue(frame.CurrentHealth)
+                    frame.HealthText:SetText(frame.CurrentHealth)
+                    Broadcast:SyncUnitFrame(frame)
+                end
+            end,
+            OnCancel = function(self)
+                local amount = tonumber(self.editBox:GetText())
+                if amount and amount > 0 then
+                    frame.CurrentHealth = math.min(frame.CurrentHealth + amount, frame.MaxHealth)
+                    frame.HealthBar:SetValue(frame.CurrentHealth)
+                    frame.HealthText:SetText(frame.CurrentHealth)
+                    Broadcast:SyncUnitFrame(frame)
+                end
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+            enterClicksFirstButton = true,
+            preferredIndex = 3,
+        }
+        StaticPopup_Show("MODIFY_UNIT_HEALTH")
+    end)
+
+    -- Function to Check if the Button Should Be Shown
+    local function UpdateEditButtonVisibility()
+        local isLeader = UnitIsGroupLeader("player") or not IsInGroup()
+        if isLeader then
+            frame.EditButton:Show()
+            frame.ModifyHealthButton:Show()
+        else
+            frame.EditButton:Hide()
+            frame.ModifyHealthButton:Hide()
+        end
+    end
 
     -- Visibility Icon (Only for Leader)
     frame.VisibilityButton = CreateFrame("Button", nil, frame)
@@ -394,20 +442,6 @@ local function ReorderUnitFrames()
         end
     end
 end
-
-local function RequestSyncFromLeader()
-    if IsInGroup() and not UnitIsGroupLeader("player") then
-        local channel = IsInRaid() and "RAID" or "PARTY"
-        C_ChatInfo.SendAddonMessage(ADDON_PREFIX, "REQUEST_SYNC", channel)
-    end
-end
-
--- Register Event to Request Sync on Group Join
-local syncRequestFrame = CreateFrame("Frame")
-syncRequestFrame:RegisterEvent("GROUP_JOINED")
-syncRequestFrame:RegisterEvent("GROUP_ROSTER_UPDATE")  -- Ensure sync when members change
-syncRequestFrame:SetScript("OnEvent", RequestSyncFromLeader)
-
 -- Event Handler for Visibility Updates
 local function OnGroupUpdate()
     for _, frame in ipairs(UnitFrames.frames) do
@@ -419,10 +453,35 @@ local function OnGroupUpdate()
 
     -- If we are the leader, broadcast a sync to ensure all frames match
     if UnitIsGroupLeader("player") then
-         UnitFrames:BroadcastUnitFrameSync()
+        for _, frame in ipairs(UnitFrames.frames) do
+            Broadcast:SyncUnitFrame(frame)
+        end
     else
-        C_Timer.After(3, RequestSyncFromLeader)  -- Request sync after 3 seconds
+        Request:SyncUnitFrame()  -- Request sync after 3 seconds
     end
+end
+
+local function HasCondition(frame, condition)
+    if frame.Auras then
+        for _, aura in ipairs(frame.Auras) do
+            if aura.Effects and #aura.Effects > 0 then
+                print(#aura.Effects)
+                for _, effect in ipairs(aura.Effects) do
+                    if effect.Type == condition then return true end
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+local function CheckForConditions(frame)
+    local stun = HasCondition(frame, "Stun")
+    local incapacitate = HasCondition(frame, "incapacitate")
+    local slow = HasCondition(frame, "Slow")
+
+    return stun, incapacitate, slow
 end
 
 -- Updates the give unit frame (direct reference) with the given data.
@@ -494,7 +553,7 @@ function UnitFrames:HighlightActiveBatch(activeBatch)
 end
 
 -- Called when the active batch changes. Causes the NPC turn button to show on any npc whose turn it now is.
-function UnitFrames:UpdateNpcTurnButtons(activeBatch)
+function UnitFrames:OnUnitFrameTurn(activeBatch)
     for _, frame in pairs(UnitFrames.frames) do
         if frame and frame.NPCNameLabel then
             local unitName = strtrim(frame.NPCNameLabel:GetText() or "")
@@ -509,10 +568,12 @@ function UnitFrames:UpdateNpcTurnButtons(activeBatch)
             end
 
             -- If active, create or show the button
-            if isActive then
-                
-                -- Restore the number of Actions
-                frame.ActionsRemaining = frame.MaxActions
+            if isActive then          
+                local stun, incapacitate, slow = CheckForConditions(frame)
+
+                -- Restore the number of Actions. If the target is stunned or incapacitated, set their 
+                -- actions remaining to zero instead.
+                frame.ActionsRemaining = (stun or incapacitate) and 0 or frame.MaxActions
 
                 if not frame.NpcTurnButton then
                     -- Create the button if it doesn't exist
@@ -520,14 +581,44 @@ function UnitFrames:UpdateNpcTurnButtons(activeBatch)
                     frame.NpcTurnButton:SetSize(20, 20)
                     frame.NpcTurnButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -5, 5)
 
+                    frame.NpcTurnButton:EnableMouse(true)
+
                     -- Set a placeholder icon (replace with a real texture later)
                     frame.NpcTurnButton:SetNormalTexture("Interface\\ICONS\\inv_faction_orderofembers_round")
 
-                    -- Click event (currently just prints a debug message)
-                    frame.NpcTurnButton:SetScript("OnClick", function()
-                        UnitFrameTurn:ShowTurnUI(frame)
+                    -- Click event: Left-click opens turn UI, Right-click ends turn
+                    frame.NpcTurnButton:SetScript("OnMouseDown", function(self, button)
+                        if button == "LeftButton" then
+                            UnitFrameTurn:ShowTurnUI(frame)
+                        elseif button == "RightButton" then
+                            frame.ActionsRemaining = 0
+                            UnitFrameTurn.actionsRemaining = 0
+                            UnitFrameTurn:UpdateActionsRemaining()
+                            UnitFrameTurn:Send_LockPortrait(frame.NPCName)
+                        end
+                    end)
+
+                    -- Tooltip
+                    frame.NpcTurnButton:SetScript("OnEnter", function(self)
+                        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+
+                        -- Set both lines using the small game font
+                        GameTooltip:AddLine("Left-click to choose actions", 0.7, 0.7, 0.7, true)
+                        GameTooltip:AddLine("Right-click to end turn", 0.7, 0.7, 0.7, true)
+
+                        -- Force small font on all tooltip text
+                        for i = 1, GameTooltip:NumLines() do
+                            _G["GameTooltipTextLeft" .. i]:SetFontObject(GameFontNormalSmall)
+                        end
+
+                        GameTooltip:Show()
+                    end)
+
+                    frame.NpcTurnButton:SetScript("OnLeave", function()
+                        GameTooltip:Hide()
                     end)
                 end
+
                 frame.NpcTurnButton:Show()
             else
                 -- Hide the button if the unit is not in the active batch
@@ -567,7 +658,6 @@ function UnitFrames:AdvanceSpellcastBars()
         if frame.CastingBar and frame.CastingBar:IsShown() then
             local currentTick = frame.CastingBar:GetValue() + 1  -- Advance by 1 tick
             local minTicks, maxTicks = frame.CastingBar:GetMinMaxValues()  -- Get the casting duration in ticks
-            print(maxTicks)
 
             -- Update the casting bar progress
             frame.CastingBar:SetValue(currentTick)
@@ -590,59 +680,14 @@ end
 -- Called when a unit frame is damaged.
 local function Handle_Damage(data)
     local args = { strsplit(";", data) }
-    local targetUnit, damage, school, sender = args[1], args[2], args[3], args[4]
+    local source, targetUnit, damage, school = args[1], args[2], args[3], args[4]
 
-    UnitFrames:ApplyDamage(targetUnit, damage, school)
+    UnitFrames:ApplyDamage(source, targetUnit, damage, school)
 end
 
 -- Called when a unit frame aura is applied or removed
 local function Handle_AddAura(data)
-    local args = { strsplit(";", data) }
-    local targetUnit, auraGuid, sender = args[1], args[2], args[3]
-
-    -- Ensure the target unit exists by matching against frame names
-    local targetFrame = nil
-    for _, frame in pairs(UnitFrames.frames) do
-        if frame.NPCNameLabel and frame.NPCNameLabel:GetText() == targetUnit then
-            targetFrame = frame
-            break
-        end
-    end
-
-    if not targetFrame then 
-        print("|cffff0000Error: Target frame for", targetUnit, "not found in UnitFrames.frames.|r")
-        return 
-    end
-
-    -- Search for the aura in the campaign's list of auras
-    local auraData = nil
-    for _, campaign in pairs(_G.CampaignToolkitCampaignsDB) do
-        if campaign.AuraList then  -- Ensure the campaign has an AuraList
-            for _, aura in pairs(campaign.AuraList) do
-                if aura.Guid == auraGuid then
-                    auraData = aura
-                    break
-                end
-            end
-        end
-        if auraData then break end
-    end
-
-    -- Break if broken!
-    if not auraData then return end
-
-    -- Apply the aura visually
-    targetFrame:AddAura({
-        {
-            Guid = auraData.Guid,
-            Icon = auraData.Icon or "Interface\\Icons\\INV_Misc_QuestionMark", -- Default icon if none is set
-            Name = auraData.Name,
-            Type = auraData.Type,
-            Caster = sender,
-            RemainingTurns = auraData.RemainingTurns,
-            Description = auraData.Description
-        }
-    })
+    print("[UnitFrames] - Obsolete method called. Use Handle:AddAuraUnitFrame instead.")
 end
 
 -- Called when a player begins their turn, and causes any auras that they have cast to tick down.
@@ -663,6 +708,7 @@ function UnitFrames:UpdateAuraTurns(caster, auraGuid)
                     aura.TurnsText:SetText(newTurns)
 
                     if newTurns == 0 then
+                        -- Print combat log
                         redraw = true
                         aura:Hide()
                     end
@@ -674,6 +720,7 @@ function UnitFrames:UpdateAuraTurns(caster, auraGuid)
     if redraw then UnitFrames:RedrawAllAuras() end
 end
 
+-- Redraws all auras. Used to keep the auras in the right place and flush to the side of the unit frame when one is added or removed.
 function UnitFrames:RedrawAllAuras()
     for _, frame in pairs(UnitFrames.frames) do
         if frame.AuraContainer then
@@ -718,16 +765,15 @@ end
 
 -- Called when a unit frame is aura is applied or removed
 local function Handle_RemoveAura(data)
-    local args = { strsplit(";", data) }
-    local targetUnit, auraGuid, sender = args[1], args[2], args[3]
+    print("[UnitFrames] - Obsolete method called. Use Handle:RemoveAuraUnitFrame instead.")
 end
 
 
 -- Called when unit frame data needs to be synced across party members.
-local function Handle_Sync(data)
+function UnitFrames:Handle_Sync(data)
     local args = { strsplit(";", data) }
-    local frameID, visibilityState, npcName, npcID, currentHealth, maxHealth, modelX, modelY, modelZ =
-        args[1], args[2], args[3], tonumber(args[4]), tonumber(args[5]), tonumber(args[6]), tonumber(args[7]), tonumber(args[8]), tonumber(args[9])
+    local frameID, visibilityState, npcName, npcID, currentHealth, maxHealth, modelX, modelY, modelZ, meleeAC, rangedAC, spellAC =
+        args[1], args[2], args[3], tonumber(args[4]), tonumber(args[5]), tonumber(args[6]), tonumber(args[7]), tonumber(args[8]), tonumber(args[9]), tonumber(args[10]), tonumber(args[11]), tonumber(args[12])
 
     if not frameID then return end
 
@@ -795,6 +841,11 @@ local function Handle_Sync(data)
         if frame.HealthText and currentHealth then
             frame.HealthText:SetText(currentHealth)
         end
+
+        -- Apply the AC values
+        frame.DefensiveAC["Melee"] = meleeAC
+        frame.DefensiveAC["Ranged"] = rangedAC
+        frame.DefensiveAC["Spell"] = spellAC
     end
 end
 
@@ -802,12 +853,14 @@ end
 local function Handle_DamagePlayer(data)
     -- Split the data string into components using ";" as delimiter
     local args = { strsplit(";", data) }
-    local unitFrame, player, damage, school = args[1], args[2], args[3], args[4]
+    local source, player, damage, school, type = args[1], args[2], args[3], args[4], args[5]
 
 
     -- Split the player name if it includes a realm (for example, "PlayerName-Realm")
     local playerName, playerRealm = strsplit("-", player)
     playerName = playerName or player -- Fallback in case the split doesn't work
+
+    CombatLog:PrintMessage(string.format("%s deals %s %s damage to %s.", source, damage, school, player))
 
     -- Check if the current player is the one who was damaged
     if UnitName("player") == playerName then
@@ -816,11 +869,20 @@ local function Handle_DamagePlayer(data)
     
         -- Get mitigation.
         local mitigation = 0
-        if school == "Physical" then
-            mitigation = _G.hiddenStats["Armor"]
+        local coefficient = 1
+        if type == "DIRECT" then
+            if school == "Physical" then
+                mitigation = _G.hiddenStats["Armor"]
+            else
+                mitigation = tonumber(_G.resistanceFrames[school].mit:GetText())
+            end
         else
-            mitigation = tonumber(_G.resistanceFrames[school].mit:GetText())
-            print(mitigation)
+            coefficient = 0.5
+            if school == "Physical" then
+                mitigation = math.floor(_G.hiddenStats["Armor"] * coefficient)
+            else
+                mitigation = math.floor(tonumber(_G.resistanceFrames[school].mit:GetText()) * coefficient)
+            end       
         end
 
         -- Calculate final damage.
@@ -875,7 +937,9 @@ local function OnAddonMessage(self, event, prefix, message, sender)
 
     -- Syncs the unit frames if a player requests it.
     if message == "REQUEST_SYNC" and UnitIsGroupLeader("player") then
-        UnitFrames:BroadcastUnitFrameSync()
+        for _, frame in ipairs(UnitFrames.frames) do
+            Broadcast:SyncUnitFrame(frame)
+        end
         return
     end
 
@@ -884,21 +948,6 @@ local function OnAddonMessage(self, event, prefix, message, sender)
     if string.sub(message, 1, 4) == "VIS:" then
         data = string.sub(message, 5)
         Handle_Visibility(data)
-    elseif string.sub(message, 1, 5) == "SYNC:" then
-        data = string.sub(message, 6)
-        Handle_Sync(data)
-    elseif string.sub(message, 1, 7) == "DAMAGE:" then
-        data = string.sub(message, 8)
-        Handle_Damage(data)
-    elseif string.sub(message, 1, 8) == "ADDAURA:" then
-        data = string.sub(message, 9)
-        Handle_AddAura(data)
-    elseif string.sub(message, 1, 8) == "REMAURA:" then
-        data = string.sub(message, 9)
-        Handle_RemoveAura(data)
-    elseif string.sub(message, 1, 14) == "DAMAGE_PLAYER:" then
-        data = string.sub(message, 15)
-        Handle_DamagePlayer(data)
     end
 end
 
@@ -952,6 +1001,7 @@ for _, frame in ipairs(UnitFrames.frames) do
     frame:SetScript("OnMouseDown", OnUnitFrameClick)
 end
 
+-- Called when a unit frame deals direct damage (i.e., via an attack) to a player.
 function UnitFrames:DamagePlayer(unitFrame, player, type)
     local typeFormatted = type
 
@@ -960,30 +1010,70 @@ function UnitFrames:DamagePlayer(unitFrame, player, type)
     elseif type:upper() == "SPELL" then typeFormatted = "Spell"
     end
 
-    -- Find the corresponding unit frame
-    for _, frame in pairs(UnitFrames.frames) do
-        if frame.NPCNameLabel and frame.NPCNameLabel:GetText() == unitFrame then
-            --print("DAMAGING " ..player.. " from " ..unitFrame)
+    if typeFormatted == "Melee" or typeFormatted == "Ranged" or typeFormatted == "Spell" then
+        -- Find the corresponding unit frame
+        for _, frame in pairs(UnitFrames.frames) do
+            if frame.NPCNameLabel and frame.NPCNameLabel:GetText() == unitFrame then
+                -- Get the spell's dice, bonus and school, then calculate the damage done (before mitigation)
+                local dice = frame.OffensiveModifiers[typeFormatted].damageDice
+                local bonus = frame.OffensiveModifiers[typeFormatted].attackBonus
+                local school = frame.OffensiveModifiers[typeFormatted].school
 
-            local dice = frame.OffensiveModifiers[typeFormatted].damageDice
-            local bonus = frame.OffensiveModifiers[typeFormatted].attackBonus
-            local school = frame.OffensiveModifiers[typeFormatted].school
+                local damage = Dice.Simple(string.format("%s+%s", dice, bonus))
 
+                -- After getting the damage done (before mitigation), send a message to all players
+                -- notifying them of the damage dealt to the player. For the player, calculate mitigation
+                -- and modify health accordingly.
+                Broadcast:DamagePlayer(unitFrame, player, damage, school, "DIRECT")
 
-            local damage = Dice.Simple(string.format("%s+%s", dice, bonus))
-            -- print("... dealing " ..dice.. "+" ..bonus.. " = " ..damage.. " damage.")
+                -- Original damage player message.
+                -- local message = string.format("%s;%s;%s;%s", unitFrame, player, damage, school)
+                -- local channel = IsInRaid() and "RAID" or "PARTY"
+                -- C_ChatInfo.SendAddonMessage(ADDON_PREFIX, "DAMAGE_PLAYER:" .. message, channel)
+                -- Original damage player message
 
-            local message = string.format("%s;%s;%s;%s", unitFrame, player, damage, school)
+                return
+            end
+        end    
+    elseif string.sub(type, 1, 4) == "USER" then
+        for _, frame in pairs(UnitFrames.frames) do
+            if frame.NPCNameLabel and frame.NPCNameLabel:GetText() == unitFrame then
+                -- ✅ Extract the spell index from "USER[XXX]"
+                local index = tonumber(string.match(type, "USER%[(%d+)%]"))  
 
-            local channel = IsInRaid() and "RAID" or "PARTY"
-            C_ChatInfo.SendAddonMessage(ADDON_PREFIX, "DAMAGE_PLAYER:" .. message, channel)
-            return
-        end
-    end    
+                print(frame.UFSpells[index].Name)
+
+                -- ✅ Ensure index is valid before proceeding
+                if index and frame.UFSpells and frame.UFSpells[index] then
+                    local spell = frame.UFSpells[index]
+                    
+                    -- Get the spell's dice, bonus and school, then calculate the damage done (before mitigation)
+                    local dice = spell.Dice
+                    local bonus = spell.Bonus or 0
+                    local school = spell.School
+
+                    local damage = Dice.Simple(string.format("%s+%s", dice, bonus))
+
+                    -- After getting the damage done (before mitigation), send a message to all players
+                    -- notifying them of the damage dealt to the player. For the player, calculate mitigation
+                    -- and modify health accordingly.
+                    Broadcast:DamagePlayer(unitFrame, player, damage, school, "DIRECT")
+
+                    -- Apply aura?
+                    if spell.Aura then
+                        CTAura:ApplyAura(player, UnitName("player"), spell.Aura)
+                    end
+                else
+                    print("Error: Invalid user spell index:", index)
+                end
+            end
+        end  
+    end
 end
 
 -- Called from Targeting.lua (which gets the correct target(s) to damage.)
-function UnitFrames:ApplyDamage(targetUnit, damage, school)
+-- Damages the given unit frame. This is called on all players' sides.
+function UnitFrames:ApplyDamage(source, targetUnit, damage, school)
     if not targetUnit or targetUnit == "NONE" then
         print("|cffff0000Error: No valid target selected.|r")
         return
@@ -995,7 +1085,10 @@ function UnitFrames:ApplyDamage(targetUnit, damage, school)
             frame.CurrentHealth = math.max(frame.CurrentHealth - damage, 0)
             frame.HealthBar:SetValue(frame.CurrentHealth)
             frame.HealthText:SetText(frame.CurrentHealth)
-            --print(targetUnit .. " takes " .. damage .. " " .. school .. "damage!")
+
+            -- Prints a message to the unit frame.
+            local message = string.format("%s deals %s %s damage to %s.", source, damage, school, frame.NPCNameLabel:GetText())
+            CombatLog:PrintMessage(message)
 
             -- Optionally handle unit death
             if frame.CurrentHealth <= 0 then
@@ -1006,88 +1099,6 @@ function UnitFrames:ApplyDamage(targetUnit, damage, school)
     end
 
     print("|cffff0000Error: Unit frame not found for target: " .. targetUnit.. "|r")
-end
-
--- Used by all players (group leader or otherwise) to broadcast the damage they have dealt to a unit frame.
-function UnitFrames:Broadcast_ApplyDamage(targetUnit, damage, school)
-    if not IsInGroup() then return end
-
-    local message = string.format("%s;%s;%s;%s", targetUnit, damage, school or "Physical", "player")
-
-    local channel = IsInRaid() and "RAID" or "PARTY"
-    C_ChatInfo.SendAddonMessage(ADDON_PREFIX, "DAMAGE:" .. message, channel)
-end
-
--- Used by all players (group leader or otherwise) to broadcast the aura they have APPLIED to the target unit.
---- This will ADD the aura icon to the unit frame.
-function UnitFrames:Broadcast_ApplyAura(targetUnit, auraGuid)
-    if not IsInGroup() then return end
-
-    local message = string.format("%s;%s;%s", targetUnit, auraGuid, UnitName("player"))
-
-    local channel = IsInRaid() and "RAID" or "PARTY"
-    C_ChatInfo.SendAddonMessage(ADDON_PREFIX, "ADDAURA:" .. message, channel)
-end
-
--- Used by all players (group leader or otherwise) to broadcast the aura they have REMOVED to the target unit.
---- This will REMOVE the aura icon from the unit frame.
-function UnitFrames:Broadcast_RemoveAura(targetUnit, auraGuid)
-    if not IsInGroup() then return end
-
-    local message = string.format("%s;%s;%s", targetUnit, auraGuid, "player")
-
-    local channel = IsInRaid() and "RAID" or "PARTY"
-    C_ChatInfo.SendAddonMessage(ADDON_PREFIX, "REMAURA:" .. message, channel)
-end
-
--- Used by the GROUP LEADER to broadcast unit frame data to the party, typically on Request_Sync messages, or when
--- the unit frame is editted.
-function UnitFrames:BroadcastUnitFrameSync()
-    if not IsInGroup() or not UnitIsGroupLeader("player") then return end
-
-    for _, frame in ipairs(UnitFrames.frames) do
-        if frame then
-            local frameID = frame:GetName() or "Unknown"
-            local visibilityState = frame.isVisible and "SHOW" or "HIDE"
-            local editButtonState = frame.EditButton and frame.EditButton:IsShown() and "1" or "0"
-            local npcID = frame.NPCID or "17227"
-            local npcName = frame.NPCName or "Unknown"
-            local currentHealth = frame.CurrentHealth or 100
-            local maxHealth = frame.MaxHealth or 100
-            local modelX = frame.ModelPosition["x"]
-            local modelY = frame.ModelPosition["y"]
-            local modelZ = frame.ModelPosition["z"]
-
-            local message = string.format("SYNC:%s;%s;%s;%d;%d;%d;%f;%f;%f", 
-                frameID, visibilityState, npcName, npcID, currentHealth, maxHealth, modelX, modelY, modelZ)
-
-            local channel = IsInRaid() and "RAID" or "PARTY"
-            C_ChatInfo.SendAddonMessage(ADDON_PREFIX, message, channel)
-        end
-    end
-end
-
-function UnitFrames:Sync_UnitFrame(frame)
-    if not IsInGroup() or not UnitIsGroupLeader("player") then return end
-
-    if frame then
-        local frameID = frame:GetName() or "Unknown"
-        local visibilityState = frame.isVisible and "SHOW" or "HIDE"
-        local editButtonState = frame.EditButton and frame.EditButton:IsShown() and "1" or "0"
-        local npcID = frame.NPCID or "17227"
-        local npcName = frame.NPCName or "Unknown"
-        local currentHealth = frame.CurrentHealth or 100
-        local maxHealth = frame.MaxHealth or 100
-        local modelX = frame.ModelPosition["x"]
-        local modelY = frame.ModelPosition["y"]
-        local modelZ = frame.ModelPosition["z"]
-
-        local message = string.format("SYNC:%s;%s;%s;%d;%d;%d;%f;%f;%f", 
-            frameID, visibilityState, npcName, npcID, currentHealth, maxHealth, modelX, modelY, modelZ)
-
-        local channel = IsInRaid() and "RAID" or "PARTY"
-        C_ChatInfo.SendAddonMessage(ADDON_PREFIX, message, channel)
-    end
 end
 
 function UnitFrames:HideAllUnitFrames()
@@ -1103,20 +1114,21 @@ function UnitFrames:ShowAllUnitFrames()
 end
 
 -- Register the Event Listener
-if not eventFrame then
-    eventFrame = CreateFrame("Frame")
-    eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
-    eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    eventFrame:RegisterEvent("CHAT_MSG_ADDON")
+if not unitFrameListener then
+    unitFrameListener = CreateFrame("Frame")
+    unitFrameListener:RegisterEvent("GROUP_ROSTER_UPDATE")
+    unitFrameListener:RegisterEvent("PLAYER_ENTERING_WORLD")
+    unitFrameListener:RegisterEvent("CHAT_MSG_ADDON")
+
+    unitFrameListener:SetScript("OnEvent", function(self, event, ...)
+        if event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" then
+            OnGroupUpdate()
+        elseif event == "CHAT_MSG_ADDON" then
+            OnAddonMessage(self, event, ...)
+        end
+    end)
 end
 
-eventFrame:SetScript("OnEvent", function(self, event, ...)
-    if event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" then
-        OnGroupUpdate()
-    elseif event == "CHAT_MSG_ADDON" then
-        OnAddonMessage(self, event, ...)
-    end
-end)
 
 -- Store globally for debugging
 _G.CampaignToolkit_UnitFrames = UnitFrames

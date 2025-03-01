@@ -8,6 +8,7 @@ _G.CharacterSheet = CharacterSheet
 _G.abilityTexts = _G.abilityTexts or {}  -- Stores UI text references for ability scores
 _G.abilityMods = _G.abilityMods or {}    -- Stores ability score modifiers
 _G.abilityBaseScores = _G.abilityBaseScores or {} -- Stores base ability scores
+_G.abilityBonusScores = _G.abilityBonusScores or {}
 
 _G.skillTexts = _G.skillTexts or {}       -- Stores UI elements for skill modifiers
 _G.skillModifiers = _G.skillModifiers or {} 
@@ -27,7 +28,9 @@ _G.hiddenStats = _G.hiddenStats or {
     HealthRegen = 0,
     Speed = 30,
     Concentration = 0,
-    Absorption = 0
+    Absorption = 0,
+    Proficiency = 0,
+    CriticalStrikeDamage = 0
 }
 
 -- Initialize hiddenStatModifiers properly using pairs to loop through the keys
@@ -37,6 +40,7 @@ for stat, _ in pairs(_G.hiddenStats) do
     _G.hiddenStatModifiers[stat] = _G.hiddenStatModifiers[stat] or 0  -- Set to 0 if it doesn't exist
 end
 
+_G.hiddenStatModifiers["Proficiency"] = 2
 
 -- Define skills grouped by ability
 local skills = {
@@ -67,6 +71,23 @@ _G.combatStats = _G.combatStats or {
     Heal = { bonus = 0, crit = 0}
 }
 
+_G.combatStatModifiers = _G.combatStatModifiers or {
+    Melee = { hit = 0, bonus = 0, crit = 0 },
+    Ranged = { hit = 0, bonus = 0, crit = 0 },
+    Spell = { hit = 0, bonus = 0, crit = 0 },
+    Haste = { hit = 0, bonus = 0, crit = 0},
+    Fire = { bonus = 0, crit = 0 },
+    Frost = { bonus = 0, crit = 0 },
+    Nature = { bonus = 0, crit = 0 },
+    Arcane = { bonus = 0, crit = 0 },
+    Fel = { bonus = 0, crit = 0 },
+    Shadow = { bonus = 0, crit = 0 },
+    Holy = { bonus = 0, crit = 0 },
+    Block = { bonus = 0, crit = 0},
+    Dodge = { bonus = 0, crit = 0},
+    Parry = { bonus = 0, crit = 0},
+    Heal = { bonus = 0, crit = 0}
+}
 
 _G.resistances = _G.resistances or {
     Fire = { mod = 0, mit = 0 },
@@ -90,7 +111,6 @@ for _, stat in ipairs(combatStats) do
     _G.statFrames[stat] = _G.statFrames[stat] or { hit = nil, bonus = nil, crit = nil }
 end
 
-
 -- print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t CharacterSheet.lua: Global tables initialized")
 
 -- ✅ Define Ability Scores (STR, DEX, etc.) & Ensure UI Elements Exist
@@ -104,7 +124,7 @@ end
 -- ✅ Load Saved Character Data
 local storedScores, storedProficiencies = LoadCharacterProfile()
 if not storedScores then
-    storedScores = { STR = 10, DEX = 10, CON = 10, INT = 10, WIS = 10, CHA = 10 }
+    storedScores = { STR = 0, DEX = 0, CON = 0, INT = 0, WIS = 0, CHA = 0 }
 end
 
 for ability, texts in pairs(_G.abilityTexts) do
@@ -315,35 +335,8 @@ diceIcon:SetPoint("CENTER", randomizeButton, "CENTER", 0, 0)
 diceIcon:SetTexture("Interface\\Icons\\inv_misc_dice_02")  -- 🎲 Dice Icon
 
 randomizeButton:SetScript("OnClick", function()
-    print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t Randomizing Ability Scores...")
-
-    -- Define the rolling function (4d6, drop lowest)
-    local function RollAbilityScore()
-        local rolls = {math.random(1,6), math.random(1,6), math.random(1,6), math.random(1,6)}
-        table.sort(rolls)
-        return rolls[2] + rolls[3] + rolls[4]  -- Drop lowest roll
-    end
-
-    -- Assign new random scores
-    for _, ability in ipairs({"STR", "DEX", "CON", "INT", "WIS", "CHA"}) do
-        local newScore = RollAbilityScore()
-        _G.abilityTexts[ability].score:SetText(newScore)
-        _G.abilityTexts[ability].mod:SetText(math.floor((newScore - 10) / 2))
-        -- print("→", ability, "rolled:", newScore)
-    end
-
-    -- ✅ Save the new ability scores
-    SaveCharacterProfile()
-
-    -- ✅ Update All Statistics
-    UpdateAbilityScores()
-    UpdateSkillModifiers()
-    UpdateCombatStats()
-    UpdateResistances()
-    UpdateProficiencyIndicators()
-    UpdateHiddenStats()
-
-    -- print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t All statistics updated!")
+    CharacterSetup:ShowUI()
+    CharacterSheet:Hide()
 end)
 
 -- ✅ Create the Reset Button with a Reset Icon 🔄
@@ -356,14 +349,16 @@ resetIcon:SetSize(closeButtonSize - 6, closeButtonSize - 6)  -- Adjust icon size
 resetIcon:SetPoint("CENTER", resetButton, "CENTER", 0, 0)
 resetIcon:SetTexture("Interface\\Icons\\spell_nature_nullifydisease")  -- 🔄 Reset Icon
 
+resetButton:Hide()
+
 -- Function to reset the profile
 local function ResetProfile()
     print("|TInterface\\DialogFrame\\UI-Dialog-Icon-AlertNew:16|t Resetting character sheet and inventory!")
 
     -- ✅ Reset Ability Scores
     for ability, texts in pairs(_G.abilityTexts) do
-        texts.score:SetText("10")
-        texts.mod:SetText("0")
+        _G.abilityBaseScores[ability] = 10
+        _G.abilityBonusScores[ability] = 0
     end
 
     -- ✅ Reset Hidden Stats with default values
@@ -377,6 +372,10 @@ local function ResetProfile()
     _G.hiddenStats.ManaRegen = 0
     _G.hiddenStats.HealthRegen = 0
     _G.hiddenStats.Speed = 30
+    _G.hiddenStats.Proficiency = 0
+    _G.hiddenStats.Absorption = 0
+    _G.hiddenStats.CriticalStrikeDamage = 0
+    _G.hiddenStats.Concentration = 0
 
     _G.hiddenStatModifiers.Health = 0
     _G.hiddenStatModifiers.MaxHealth = 0
@@ -388,6 +387,10 @@ local function ResetProfile()
     _G.hiddenStatModifiers.ManaRegen = 0
     _G.hiddenStatModifiers.HealthRegen = 0
     _G.hiddenStatModifiers.Speed = 0
+    _G.hiddenStatModifiers.CriticalStrikeDamage = 0
+    _G.hiddenStatModifiers.Absorption = 0
+    _G.hiddenStatModifiers.Proficiency = 2
+    _G.hiddenStatModifiers.Concentration = 0
 
     -- ✅ Reset Skill Modifiers
     for skill, _ in pairs(_G.skillModifiers) do
@@ -512,11 +515,15 @@ function UpdateAbilityScores()
     for ability, texts in pairs(_G.abilityTexts) do
         if texts.score and texts.mod then
             -- ✅ Read directly from the UI instead of `abilityBaseScores`
-            local baseScore = tonumber(texts.score:GetText()) or 10 -- the old score
-            local modValue = math.floor((baseScore - 10) / 2)
+            local baseScore = tonumber(_G.abilityBaseScores[ability]) or 10 -- the old score
+            local bonusScore = tonumber(_G.abilityBonusScores[ability]) or 0
+
+            local totalScore = baseScore + bonusScore
+
+            local modValue = math.floor((totalScore - 10) / 2)
 
             -- ✅ Update UI elements
-            texts.score:SetText(baseScore)
+            texts.score:SetText(totalScore)
             texts.mod:SetText(modValue)
 
             -- ✅ Store the modifier globally for other calculations
@@ -654,7 +661,7 @@ profBonusLabel:SetText("Proficiency Bonus: ")
 
 local profBonusValue = CharacterSheet.TabFrames[1]:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 profBonusValue:SetPoint("LEFT", profBonusLabel, "RIGHT", 5, 1)
-profBonusValue:SetText("+2")  -- Default starting proficiency bonus
+profBonusValue:SetText("+" .._G.hiddenStats["Proficiency"])  -- Default starting proficiency bonus
 
 -- Proficiency Slots (Green Circles)
 local profCircles = {}
@@ -931,7 +938,7 @@ local combatDivider, combatHeading = CreateDivider(CharacterSheet.TabFrames[1], 
 function UpdateCombatStats()
     local abilityMods = _G.abilityMods or {}  -- ✅ Ensure abilityMods exist
     local combatStatMappings = {
-        STR = {"Melee.bonus"},
+        STR = {"Melee.bonus", "Block.bonus", "Parry.bonus"},
         DEX = {"Ranged.bonus", "Dodge.bonus"},
         CON = {}, -- No direct combat impact
         INT = {"Spell.bonus"},
@@ -942,19 +949,29 @@ function UpdateCombatStats()
     -- Recalculate ability modifiers dynamically
     for ability, texts in pairs(_G.abilityTexts) do
         local scoreText = tonumber(texts.score:GetText()) or 10
+        local scoreText = tonumber(texts.score:GetText()) or 10
         abilityMods[ability] = math.floor((scoreText - 10) / 2)
     end
 
-    -- Apply ability modifiers to combat stats
+    -- Apply ability modifiers to all combat stats
+    for category, stats in pairs(_G.combatStatModifiers) do
+        _G.combatStats[category] = _G.combatStats[category] or {} -- Ensure category exists
+        for statType, value in pairs(stats) do
+            _G.combatStats[category][statType] = value -- Apply modifier safely
+            -- print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t DEBUG: Updated Combat Stat:", category, statType, "→", value)
+        end
+    end
+
+    -- Add the ability score modifier if necessary
     for ability, affectedStats in pairs(combatStatMappings) do
         local baseMod = abilityMods[ability] or 0
         for _, stat in ipairs(affectedStats) do
             local category, statType = stat:match("([^%.]+)%.([^%.]+)")
             if _G.combatStats[category] and _G.combatStats[category][statType] then
-                _G.combatStats[category][statType] = baseMod
+                _G.combatStats[category][statType] = baseMod + _G.combatStats[category][statType]
                 -- print("|TInterface\\RaidFrame\\ReadyCheck-Ready:16|t DEBUG: Updated Combat Stat:", category, statType, "→", baseMod)
             else
-                -- print("⚠️ ERROR: No combat stat found for", category, statType)
+                --print("⚠️ ERROR: No combat stat found for", category, statType)
             end
         end
     end
@@ -1053,44 +1070,54 @@ local function UpdateProficiencyIndicators()
     end
 end
 
--- ✅ Update Hidden Stats based on Ability Modifiers
 function UpdateHiddenStats()
-    local abilityMods = _G.abilityMods  -- Use directly updated ability modifiers
-    _G.hiddenStatModifiers = _G.hiddenStatModifiers or {}  -- Ensure hiddenStatModifiers exists, initializing if needed
+    local abilityMods = _G.abilityMods or {}  -- Ensure abilityMods exists
+    _G.hiddenStatModifiers = _G.hiddenStatModifiers or {}  -- Ensure hiddenStatModifiers exists
+    _G.hiddenStats = _G.hiddenStats or {}  -- Ensure hiddenStats exists
+
+    -- Store current Health and Mana before updating
+    local currentHealth = _G.hiddenStats.Health or 0
+    local currentMana = _G.hiddenStats.Mana or 0
 
     -- Mapping of stats to abilities
     local statMappings = {
-        MaxHealth = { ability = "CON", multiplier = 3, base = 15 },  -- MaxHealth is modified by 3x Constitution
-        MaxMana = { ability = "INT", multiplier = 1, base = 10 },   -- MaxMana is modified by 1x Intelligence
-        Armor = { ability = "DEX", multiplier = 0.5, base = 0 },     -- Armor is modified by 0.5x Dexterity
+        MaxHealth = { ability = "CON", multiplier = 3, base = 15 },
+        MaxMana = { ability = "INT", multiplier = 1, base = 10 },
+        Armor = { ability = "DEX", multiplier = 0.5, base = 0 },
         Initiative = { ability = "DEX", multiplier = 1, base = 0 },
         Deflection = { ability = "STR", multiplier = 0.5, base = 0 },
         ManaRegen = { ability = "WIS", multiplier = 0.25, base = 0 },
         HealthRegen = { ability = "WIS", multiplier = 0.25, base = 0 },
-        Speed = { ability = "DEX", multiplier = 1, base = 0},
-        Concentration = { ability = "INT", multiplier = 1, base = 0}
+        Speed = { ability = "DEX", multiplier = 1, base = 0 },
+        Concentration = { ability = "INT", multiplier = 1, base = 0 }
     }
 
-    -- Loop through the mapped abilities to update the corresponding hidden stats
-    for stat, data in pairs(statMappings) do
-        local abilityModValue = abilityMods[data.ability] or 0  -- Get the ability modifier (e.g., CON, INT, DEX)
-        
-        -- Ensure hidden stat modifier is initialized (if it's missing, default to 0)
-        local hiddenStatModifier = _G.hiddenStatModifiers[stat] or 0  -- Get the ability modifier (e.g., CON, INT, DEX)
-
-        -- Calculate the final value by applying the base value, hidden stat modifier, and the ability modifier
-        local finalValue = data.base + hiddenStatModifier + (abilityModValue * data.multiplier)
-
-        -- Update the corresponding hidden stat
-        _G.hiddenStats[stat] = finalValue
+    -- Clear all hidden stats except Health and Mana
+    for stat, _ in pairs(_G.hiddenStats) do
+        if stat ~= "Health" and stat ~= "Mana" then
+            _G.hiddenStats[stat] = 0
+        end
     end
 
-    -- ✅ Clamp Health between 0 and MaxHealth
-    _G.hiddenStats.Health = math.max(0, math.min(_G.hiddenStats.Health or 0, _G.hiddenStats.MaxHealth or 0))
+    -- Loop through statMappings and update mapped stats
+    for stat, data in pairs(statMappings) do
+        local abilityModValue = abilityMods[data.ability] or 0
+        local hiddenStatModifier = _G.hiddenStatModifiers[stat] or 0
+        
+        -- Calculate final value
+        _G.hiddenStats[stat] = data.base + hiddenStatModifier + (abilityModValue * data.multiplier)
+    end
 
-    -- ✅ Clamp Mana between 0 and MaxMana
-    _G.hiddenStats.Mana = math.max(0, math.min(_G.hiddenStats.Mana or 0, _G.hiddenStats.MaxMana or 0))
+    -- ✅ Handle hidden stats that aren't in statMappings but have a hiddenStatModifier
+    for stat, modifier in pairs(_G.hiddenStatModifiers) do
+        if not statMappings[stat] then
+            _G.hiddenStats[stat] = (_G.hiddenStats[stat] or 0) + modifier
+        end
+    end
 
+    -- ✅ Clamp Health and Mana, preserving current values
+    _G.hiddenStats.Health = math.max(0, math.min(currentHealth, _G.hiddenStats.MaxHealth or 0))
+    _G.hiddenStats.Mana = math.max(0, math.min(currentMana, _G.hiddenStats.MaxMana or 0))
 end
 
 
@@ -1106,7 +1133,8 @@ function UpdateSkillModifiers()
         abilityMods[ability] = math.floor((scoreText - 10) / 2)
     end
 
-    local proficiencyBonus = tonumber(profBonusValue:GetText():match("%d+")) or 2
+    local profBonus = _G.hiddenStats["Proficiency"] + _G.hiddenStatModifiers["Proficiency"]
+    profBonusValue:SetText("+" ..profBonus)  -- Default starting proficiency bonus
 
     -- ✅ Ensure skills are updated with both ability mods AND stored item effects
     for skill, ability in pairs(skillToAbility) do
@@ -1115,7 +1143,7 @@ function UpdateSkillModifiers()
         local finalMod = baseMod + itemBonus
 
         if _G.playerProficiencies[skill] then
-            finalMod = finalMod + proficiencyBonus
+            finalMod = finalMod + profBonus
         end
 
         -- ✅ Update skill modifier text
